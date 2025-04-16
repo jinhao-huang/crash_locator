@@ -184,8 +184,9 @@ if __name__ == "__main__":
             try:
                 pre_check(pre_check_report_path)
             except EmptyExceptionInfoException:
-                logger.error(f"Empty exception info for {report_name}")
+                logger.error(f"Crash report {report_name} empty exception info")
                 statistic.invalid_reports += 1
+                shutil.rmtree(pre_check_report_path)
                 continue
 
             logger.info(f"Crash report {report_name} pre-checked")
