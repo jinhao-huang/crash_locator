@@ -7,6 +7,7 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 from pathlib import Path
 import json
 import shutil
+from crash_locator.my_types import PreCheckStatistic
 
 logger = logging.getLogger(__name__)
 
@@ -166,6 +167,7 @@ def pre_check(pre_check_reports_dir: Path):
 if __name__ == "__main__":
     crash_reports_dir = Config.CRASH_REPORTS_DIR
     pre_check_reports_dir = Config.PRE_CHECK_REPORTS_DIR
+    statistic = PreCheckStatistic()
     work_list = crash_reports_dir.iterdir()
 
     with logging_redirect_tqdm():
@@ -174,6 +176,7 @@ if __name__ == "__main__":
             crash_report_path = crash_report_dir / f"{report_name}.json"
             if not crash_report_path.exists():
                 logger.error(f"Crash report {report_name} not found")
+                statistic.invalid_reports += 1
                 continue
 
             pre_check_report_path = pre_check_reports_dir / report_name
@@ -184,6 +187,11 @@ if __name__ == "__main__":
                 pre_check(pre_check_report_path)
             except EmptyExceptionInfoException:
                 logger.error(f"Empty exception info for {report_name}")
+                statistic.invalid_reports += 1
                 continue
 
-            logger.info(f"Crash report {report_name} found")
+            logger.info(f"Crash report {report_name} pre-checked")
+            statistic.valid_reports += 1
+
+    with open(Config.PRE_CHECK_STATISTIC_PATH, "w") as f:
+        f.write(statistic.model_dump_json(indent=4))
