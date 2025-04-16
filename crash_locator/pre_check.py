@@ -1,6 +1,6 @@
 import logging
 from .config import Config
-from .utils.report_info import ReportInfo
+from crash_locator.my_types import ReportInfo
 from crash_locator.exceptions import EmptyExceptionInfoException
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
