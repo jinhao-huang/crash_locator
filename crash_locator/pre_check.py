@@ -157,9 +157,7 @@ def pre_check(pre_check_reports_dir: Path):
         crash_message=report["Crash Info in Dataset"]["Crash Message"],
     )
 
-    output_file_path = (
-        pre_check_reports_dir / Config.PRE_CHECK_REPORTS_DIR_REPORT_INFO_PATH
-    )
+    output_file_path = pre_check_reports_dir / Config.PRE_CHECK_REPORT_INFO_NAME
     with open(output_file_path, "w") as json_file:
         json_file.write(report_info.model_dump_json(indent=4))
 

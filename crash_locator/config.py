@@ -2,9 +2,12 @@ from pathlib import Path
 
 
 class Config:
-    CRASH_REPORTS_DIR: Path = Path.cwd() / "Data" / "crash_reports" / "all-0328"
-    PRE_CHECK_REPORTS_DIR: Path = Path.cwd() / "Data" / "TSE25" / "pre_check"
-    PRE_CHECK_REPORTS_DIR_REPORT_INFO_PATH: Path = Path("report_info.json")
+    ROOT_DIR: Path = Path.cwd()
+
+    CRASH_REPORTS_DIR: Path = ROOT_DIR / "Data" / "crash_reports" / "all-0328"
+
+    PRE_CHECK_REPORTS_DIR: Path = ROOT_DIR / "Data" / "TSE25" / "pre_check"
+    PRE_CHECK_REPORT_INFO_NAME: str = "report_info.json"
     PRE_CHECK_STATISTIC_PATH: Path = PRE_CHECK_REPORTS_DIR / "statistic.json"
 
     ANDROID_CG_PATH = lambda v: f"Data/AndroidCG/android{v}/android{v}_cg.txt"
