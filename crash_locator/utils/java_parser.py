@@ -22,7 +22,9 @@ def get_application_code(
         application_code_path / method_signature.into_path(),
         method_signature.method_name,
         method_signature.return_type,
-        method_signature.parameters,
+        [param.split(".")[-1] for param in method_signature.parameters]
+        if method_signature.parameters
+        else None,
     )
 
 
