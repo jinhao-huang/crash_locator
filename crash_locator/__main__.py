@@ -14,7 +14,10 @@ logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
     statistic = RunStatistic()
-    work_list = Config.PRE_CHECK_REPORTS_DIR.iterdir()
+    if Config.DEBUG:
+        work_list = [Config.DEBUG_PRE_CHECK_REPORT_DIR]
+    else:
+        work_list = Config.PRE_CHECK_REPORTS_DIR.iterdir()
 
     with logging_redirect_tqdm():
         for pre_check_report_dir in tqdm(list(work_list), desc="Processing reports"):

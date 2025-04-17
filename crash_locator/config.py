@@ -1,10 +1,19 @@
 from pathlib import Path
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class Config:
     ROOT_DIR: Path = Path.cwd()
 
     CRASH_REPORTS_DIR: Path = ROOT_DIR / "Data" / "crash_reports" / "all-0328"
+
+    DEBUG: bool = os.environ.get("DEBUG", "false").lower() == "true"
+    DEBUG_PRE_CHECK_REPORT_DIR: Path = Path(
+        os.environ.get("DEBUG_PRE_CHECK_REPORT_DIR")
+    )
 
     PRE_CHECK_REPORTS_DIR: Path = ROOT_DIR / "Data" / "TSE25" / "pre_check"
     PRE_CHECK_REPORT_INFO_NAME: str = "report_info.json"
