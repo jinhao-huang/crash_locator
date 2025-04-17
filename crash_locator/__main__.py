@@ -31,6 +31,7 @@ if __name__ == "__main__":
             with open(report_path, "r") as f:
                 report_info = ReportInfo(**json.load(f))
 
+            invalid_report_flag = False
             for candidate in report_info.candidates:
                 logger.info(f"Processing candidate {candidate['Candidate Signature']}")
                 try:
@@ -38,12 +39,22 @@ if __name__ == "__main__":
                     application_code = get_application_code(
                         report_info.apk_name, method_signature
                     )
-                except (MethodCodeException, InvalidSignatureException):
+                except (MethodCodeException, InvalidSignatureException) as e:
+                    logger.error(
+                        f"Error processing candidate {candidate['Candidate Signature']}: {e}"
+                    )
                     statistic.invalid_methods += 1
+                    invalid_report_flag = True
                     continue
 
                 statistic.valid_methods += 1
 
-            statistic.valid_reports += 1
+            if invalid_report_flag:
+                statistic.invalid_reports += 1
+                logger.error(
+                    f"Invalid report {report_name}\nfile: {pre_check_report_dir}\napplication code dir: {Config.APPLICATION_CODE_PATH(report_info.apk_name)}"
+                )
+            else:
+                statistic.valid_reports += 1
 
     print(statistic)
