@@ -1,4 +1,4 @@
-from tree_sitter import Language, Parser
+from tree_sitter import Language, Parser, Node
 import tree_sitter_java
 from pathlib import Path
 from crash_locator.config import Config
@@ -7,6 +7,7 @@ from crash_locator.exceptions import (
     MultipleMethodsCodeError,
     NoMethodFoundCodeError,
     MethodFileNotFoundException,
+    UnknownException,
 )
 
 JAVA_LANGUAGE = Language(tree_sitter_java.language())
@@ -25,7 +26,7 @@ def get_application_code(
         if method_signature.return_type
         else None,
         [param.split(".")[-1] for param in method_signature.parameters]
-        if method_signature.parameters
+        if method_signature.parameters is not None
         else None,
     )
 
@@ -51,10 +52,10 @@ def _get_method_code_in_file(
                 f"""
             (
                 formal_parameter
-                . (_) @para (#eq? @para "{argument}")
+                . (_) @para{index} (#eq? @para{index} "{argument}")
             )
-        """
-                for argument in arguments
+            """
+                for index, argument in enumerate(arguments)
             ]
         )
         argument_query = f". {argument_query} ."
@@ -62,18 +63,16 @@ def _get_method_code_in_file(
     query_string = f"""
     (
         method_declaration
-        {return_type_query if return_type else ""}
+        {return_type_query if return_type is not None else ""}
         (identifier) @name (#eq? @name "{method_name}")
-        (formal_parameters
-            {argument_query if arguments else ""}
-        )
+        (formal_parameters)
     ) @method"""
 
     query = JAVA_LANGUAGE.query(query_string)
     captures = query.captures(tree.root_node)
 
-    method = captures.get("method")
-    if method is None:
+    method = _filter_methods_by_parameters(captures.get("method"), arguments)
+    if method is None or len(method) == 0:
         raise NoMethodFoundCodeError()
     elif len(method) > 1:
         raise MultipleMethodsCodeError()
@@ -81,3 +80,42 @@ def _get_method_code_in_file(
         method = method[0]
 
     return method.text.decode("utf8")
+
+
+def _get_formal_parameters(method: Node) -> Node | None:
+    for node in method.named_children:
+        if node.type == "formal_parameters":
+            return node
+    return None
+
+
+def _filter_methods_by_parameters(
+    methods: list[Node] | None,
+    parameters: list[str] | None,
+) -> list[Node] | None:
+    if methods is None:
+        return None
+    if parameters is None:
+        return methods
+
+    filtered_methods = []
+    for method in methods:
+        formal_parameters = _get_formal_parameters(method)
+        if formal_parameters is None:
+            raise UnknownException()
+
+        if formal_parameters.named_child_count != len(parameters):
+            continue
+
+        matched = True
+        for parameter, expected_parameter in zip(
+            formal_parameters.named_children, parameters
+        ):
+            type_identifier = parameter.named_children[0]
+            if type_identifier.text.decode("utf8") != expected_parameter:
+                matched = False
+                break
+        if matched:
+            filtered_methods.append(method)
+
+    return filtered_methods

@@ -38,3 +38,9 @@ class MethodFileNotFoundException(MethodCodeException):
     def __init__(self, message="Method file not found"):
         self.message = message
         super().__init__(self.message)
+
+
+class UnknownException(Exception):
+    def __init__(self, message="Unknown exception"):
+        self.message = message
+        super().__init__(self.message)
