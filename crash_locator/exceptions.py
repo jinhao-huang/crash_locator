@@ -44,3 +44,27 @@ class UnknownException(Exception):
     def __init__(self, message="Unknown exception"):
         self.message = message
         super().__init__(self.message)
+
+
+class TreeSitterException(Exception):
+    def __init__(self, message="Tree Sitter exception"):
+        self.message = message
+        super().__init__(self.message)
+
+
+class ParentTypeNotMatchException(TreeSitterException):
+    def __init__(self, message="Parent type not match"):
+        self.message = message
+        super().__init__(self.message)
+
+
+class ChildNotFoundException(TreeSitterException):
+    def __init__(self, message="Child not found"):
+        self.message = message
+        super().__init__(self.message)
+
+
+class MultipleChildrenFoundException(TreeSitterException):
+    def __init__(self, message="Multiple children found"):
+        self.message = message
+        super().__init__(self.message)

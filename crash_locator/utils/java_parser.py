@@ -1,4 +1,5 @@
 from tree_sitter import Language, Parser, Node
+from typing import Callable
 import tree_sitter_java
 from pathlib import Path
 from crash_locator.config import Config
@@ -8,7 +9,10 @@ from crash_locator.exceptions import (
     NoMethodFoundCodeError,
     MethodFileNotFoundException,
     UnknownException,
+    ParentTypeNotMatchException,
+    ChildNotFoundException,
 )
+from crash_locator.utils.tree_sitter_helper import get_parent, get_child
 
 JAVA_LANGUAGE = Language(tree_sitter_java.language())
 parser = Parser(JAVA_LANGUAGE)
@@ -20,23 +24,21 @@ def get_application_code(
 ) -> str:
     application_code_path = Config.APPLICATION_CODE_PATH(apk_name)
     return _get_method_code_in_file(
-        application_code_path / method_signature.into_path(),
-        method_signature.method_name,
-        method_signature.return_type.split(".")[-1]
-        if method_signature.return_type
-        else None,
-        [param.split(".")[-1] for param in method_signature.parameters]
-        if method_signature.parameters is not None
-        else None,
+        application_code_path / method_signature.into_path(), method_signature
     )
 
 
 def _get_method_code_in_file(
     file_path: Path,
-    method_name: str,
-    return_type: str | None = None,
-    arguments: list[str] | None = None,
+    method_signature: MethodSignature,
 ) -> str:
+    method_name = method_signature.method_name
+    return_type = (
+        method_signature.return_type.split(".")[-1]
+        if method_signature.return_type
+        else None
+    )
+
     if not file_path.exists():
         raise MethodFileNotFoundException()
 
@@ -46,19 +48,6 @@ def _get_method_code_in_file(
 
     if return_type is not None:
         return_type_query = f'(_) @type (#eq? @type "{return_type}") .'
-    if arguments is not None:
-        argument_query = " . ".join(
-            [
-                f"""
-            (
-                formal_parameter
-                . (_) @para{index} (#eq? @para{index} "{argument}")
-            )
-            """
-                for index, argument in enumerate(arguments)
-            ]
-        )
-        argument_query = f". {argument_query} ."
 
     query_string = f"""
     (
@@ -71,7 +60,11 @@ def _get_method_code_in_file(
     query = JAVA_LANGUAGE.query(query_string)
     captures = query.captures(tree.root_node)
 
-    method = _filter_methods_by_parameters(captures.get("method"), arguments)
+    method = _filter_methods(
+        captures.get("method"),
+        method_signature,
+        [_methods_parameters_filter, _anonymous_class_filter],
+    )
     if method is None or len(method) == 0:
         raise NoMethodFoundCodeError()
     elif len(method) > 1:
@@ -82,25 +75,37 @@ def _get_method_code_in_file(
     return method.text.decode("utf8")
 
 
-def _get_formal_parameters(method: Node) -> Node | None:
-    for node in method.named_children:
-        if node.type == "formal_parameters":
-            return node
-    return None
-
-
-def _filter_methods_by_parameters(
+def _filter_methods(
     methods: list[Node] | None,
-    parameters: list[str] | None,
-) -> list[Node] | None:
+    method_signature: MethodSignature,
+    filter_functions: list[Callable[[list[Node], MethodSignature], list[Node]]],
+) -> list[Node]:
     if methods is None:
-        return None
+        return []
+
+    for filter_function in filter_functions:
+        methods = filter_function(methods, method_signature)
+        if len(methods) == 0:
+            return []
+    return methods
+
+
+def _methods_parameters_filter(
+    methods: list[Node],
+    method_signature: MethodSignature,
+) -> list[Node]:
+    parameters = (
+        [param.split(".")[-1] for param in method_signature.parameters]
+        if method_signature.parameters is not None
+        else None
+    )
+
     if parameters is None:
         return methods
 
     filtered_methods = []
     for method in methods:
-        formal_parameters = _get_formal_parameters(method)
+        formal_parameters = get_child(method, "formal_parameters")
         if formal_parameters is None:
             raise UnknownException()
 
@@ -117,5 +122,31 @@ def _filter_methods_by_parameters(
                 break
         if matched:
             filtered_methods.append(method)
+
+    return filtered_methods
+
+
+def _anonymous_class_filter(
+    methods: list[Node], method_signature: MethodSignature
+) -> list[Node]:
+    inner_class = method_signature.inner_class
+    if inner_class is None:
+        return methods
+    if not inner_class.split("$")[-1].isdigit():
+        return methods
+
+    filtered_methods = []
+    for method in methods:
+        try:
+            class_body = get_parent(method, "class_body")
+            line_comment = get_child(class_body, "line_comment")
+            if (
+                line_comment is not None
+                and method_signature.full_class_name()
+                in line_comment.text.decode("utf8")
+            ):
+                filtered_methods.append(method)
+        except (ParentTypeNotMatchException, ChildNotFoundException):
+            continue
 
     return filtered_methods

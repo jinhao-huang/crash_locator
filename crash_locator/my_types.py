@@ -96,3 +96,9 @@ class MethodSignature(BaseModel):
 
     def into_path(self) -> Path:
         return Path(self.package_name.replace(".", "/")) / f"{self.class_name}.java"
+
+    def full_class_name(self) -> str:
+        if self.inner_class:
+            return f"{self.class_name}.{self.inner_class.replace('$', '.')}"
+        else:
+            return self.class_name
