@@ -21,7 +21,9 @@ def get_application_code(
     return _get_method_code_in_file(
         application_code_path / method_signature.into_path(),
         method_signature.method_name,
-        method_signature.return_type,
+        method_signature.return_type.split(".")[-1]
+        if method_signature.return_type
+        else None,
         [param.split(".")[-1] for param in method_signature.parameters]
         if method_signature.parameters
         else None,
@@ -65,8 +67,7 @@ def _get_method_code_in_file(
         (formal_parameters
             {argument_query if arguments else ""}
         )
-    ) @method
-    """
+    ) @method"""
 
     query = JAVA_LANGUAGE.query(query_string)
     captures = query.captures(tree.root_node)
