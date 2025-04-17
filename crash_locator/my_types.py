@@ -24,6 +24,15 @@ class ReportInfo(BaseModel):
     related_condition_type: str
 
 
+class RunStatistic(BaseModel):
+    total_methods: int = 0
+    valid_methods: int = 0
+    invalid_methods: int = 0
+    total_reports: int = 0
+    valid_reports: int = 0
+    invalid_reports: int = 0
+
+
 class MethodSignature(BaseModel):
     package_name: str
     class_name: str

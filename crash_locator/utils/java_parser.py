@@ -3,14 +3,14 @@ import tree_sitter_java
 from pathlib import Path
 from crash_locator.config import Config
 from crash_locator.my_types import MethodSignature
+from crash_locator.exceptions import (
+    MultipleMethodsCodeError,
+    NoMethodFoundCodeError,
+    MethodFileNotFoundException,
+)
 
 JAVA_LANGUAGE = Language(tree_sitter_java.language())
 parser = Parser(JAVA_LANGUAGE)
-
-
-class MultipleMethodsError(Exception):
-    def __init__(self, message="Multiple methods found with the same name."):
-        self.message = message
 
 
 def get_application_code(
@@ -29,9 +29,12 @@ def get_application_code(
 def _get_method_code_in_file(
     file_path: Path,
     method_name: str,
-    return_type: str = None,
-    arguments: list[str] = None,
+    return_type: str | None = None,
+    arguments: list[str] | None = None,
 ) -> str:
+    if not file_path.exists():
+        raise MethodFileNotFoundException()
+
     with open(file_path, "r", encoding="utf-8") as f:
         source_code = f.read()
     tree = parser.parse(bytes(source_code, "utf8"))
@@ -66,9 +69,11 @@ def _get_method_code_in_file(
     query = JAVA_LANGUAGE.query(query_string)
     captures = query.captures(tree.root_node)
 
-    method = captures["method"]
-    if len(method) > 1:
-        raise MultipleMethodsError()
+    method = captures.get("method")
+    if method is None:
+        raise NoMethodFoundCodeError()
+    elif len(method) > 1:
+        raise MultipleMethodsCodeError()
     else:
         method = method[0]
 

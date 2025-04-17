@@ -1,5 +1,5 @@
 import logging
-from .config import Config
+from crash_locator.config import Config
 from crash_locator.my_types import ReportInfo
 from crash_locator.exceptions import EmptyExceptionInfoException
 from tqdm import tqdm
