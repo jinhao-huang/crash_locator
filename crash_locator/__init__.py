@@ -6,6 +6,8 @@ beartype_this_package()
 
 logger = logging.getLogger()
 streamHandler = logging.StreamHandler(sys.stdout)
-streamHandler.setFormatter(logging.Formatter("(%(asctime)s)[%(levelname)s] %(message)s"))
+streamHandler.setFormatter(
+    logging.Formatter("(%(asctime)s)[%(levelname)s] %(message)s")
+)
 logger.addHandler(streamHandler)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.ERROR)
