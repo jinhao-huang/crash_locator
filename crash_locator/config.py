@@ -10,6 +10,11 @@ class Config:
     PRE_CHECK_REPORT_INFO_NAME: str = "report_info.json"
     PRE_CHECK_STATISTIC_PATH: Path = PRE_CHECK_REPORTS_DIR / "statistic.json"
 
+    APPLICATION_CODE_DIR: Path = ROOT_DIR / "Data" / "application_source_code"
+
+    def APPLICATION_CODE_PATH(apk_name: str) -> Path:
+        return Config.APPLICATION_CODE_DIR / apk_name / "sources"
+
     ANDROID_CG_PATH = lambda v: f"Data/AndroidCG/android{v}/android{v}_cg.txt"
     APK_CG_PATH = lambda apk_name: f"Data/ApkCG/{apk_name}/{apk_name}_cg.txt"
     ANDROID_CG_CALLED_CACHE_PATH = (
