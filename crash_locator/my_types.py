@@ -90,6 +90,10 @@ class MethodSignature(BaseModel):
         else:
             return self.class_name
 
+    def __str__(self) -> str:
+        params = ", ".join(self.parameters) if self.parameters else ""
+        return f"{self.package_name}.{self.class_name}{'.' + self.inner_class if self.inner_class else ''}: {self.return_type} {self.method_name}({params})"
+
 
 class Candidate(BaseModel):
     name: str
