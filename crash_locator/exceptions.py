@@ -10,7 +10,7 @@ class EmptyExceptionInfoException(PreCheckException):
         super().__init__(self.message)
 
 
-class InvalidSignatureException(Exception):
+class InvalidSignatureException(PreCheckException):
     def __init__(self, message="Invalid signature"):
         self.message = message
         super().__init__(self.message)

@@ -10,20 +10,6 @@ class PreCheckStatistic(BaseModel):
     invalid_reports: int = 0
 
 
-class ReportInfo(BaseModel):
-    apk_name: str
-    android_version: str
-    regression_message: str
-    exception_type: str
-    crash_message: str
-    stack_trace: list[str]
-    stack_trace_short_api: list[str]
-    candidates: list[dict]
-    ets_related_type: str
-    related_variable_type: str
-    related_condition_type: str
-
-
 class RunStatistic(BaseModel):
     total_methods: int = 0
     valid_methods: int = 0
@@ -41,7 +27,8 @@ class MethodSignature(BaseModel):
     return_type: str | None = None
     parameters: list[str] | None = None
 
-    def __init__(self, method_signature: str):
+    @classmethod
+    def from_str(cls, method_signature: str) -> "MethodSignature":
         """
         Example Method Signature:
         1. android.view.ViewRoot: void checkThread()
@@ -85,7 +72,7 @@ class MethodSignature(BaseModel):
         else:
             raise InvalidSignatureException(f"Invalid signature: {method_signature}")
 
-        super().__init__(
+        return cls(
             package_name=package_name,
             class_name=class_name,
             inner_class=inner_class,
@@ -102,3 +89,23 @@ class MethodSignature(BaseModel):
             return f"{self.class_name}.{self.inner_class.replace('$', '.')}"
         else:
             return self.class_name
+
+
+class Candidate(BaseModel):
+    name: str
+    signature: MethodSignature
+    reasons: list[dict]
+
+
+class ReportInfo(BaseModel):
+    apk_name: str
+    android_version: str
+    regression_message: str
+    exception_type: str
+    crash_message: str
+    stack_trace: list[str]
+    stack_trace_short_api: list[str]
+    candidates: list[Candidate]
+    ets_related_type: str
+    related_variable_type: str
+    related_condition_type: str

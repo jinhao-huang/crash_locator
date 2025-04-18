@@ -36,14 +36,13 @@ if __name__ == "__main__":
 
             invalid_report_flag = False
             for candidate in report_info.candidates:
-                candidate_signature: str = candidate["Candidate Signature"]
+                candidate_signature = candidate.signature
                 logger.info(f"Processing candidate {candidate_signature}")
                 try:
-                    method_signature = MethodSignature(candidate_signature)
                     application_code = get_application_code(
-                        report_info.apk_name, method_signature
+                        report_info.apk_name, candidate_signature
                     )
-                except (MethodCodeException, InvalidSignatureException) as e:
+                except MethodCodeException as e:
                     logger.error(
                         f"Error processing candidate {candidate_signature}: {e}"
                     )

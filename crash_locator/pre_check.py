@@ -1,13 +1,13 @@
 import logging
 from crash_locator.config import Config
 from crash_locator.my_types import ReportInfo
-from crash_locator.exceptions import EmptyExceptionInfoException
+from crash_locator.exceptions import EmptyExceptionInfoException, PreCheckException
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 from pathlib import Path
 import json
 import shutil
-from crash_locator.my_types import PreCheckStatistic
+from crash_locator.my_types import PreCheckStatistic, Candidate, MethodSignature
 
 logger = logging.getLogger(__name__)
 
@@ -151,8 +151,17 @@ def pre_check(pre_check_reports_dir: Path):
             for method in report["Crash Info in Dataset"]["stack trace signature"]
         ],
         stack_trace_short_api=report["Crash Info in Dataset"]["stack trace"],
-        candidates=report["Fault Localization by CrashTracker"][
-            "Buggy Method Candidates"
+        candidates=[
+            Candidate(
+                name=candidate["Candidate Name"],
+                signature=MethodSignature.from_str(candidate["Candidate Signature"])
+                if candidate["Candidate Signature"] != ""
+                else MethodSignature.from_str(candidate["Candidate Name"]),
+                reasons=candidate["Reasons"],
+            )
+            for candidate in report["Fault Localization by CrashTracker"][
+                "Buggy Method Candidates"
+            ]
         ],
         crash_message=report["Crash Info in Dataset"]["Crash Message"],
     )
@@ -183,8 +192,8 @@ if __name__ == "__main__":
 
             try:
                 pre_check(pre_check_report_path)
-            except EmptyExceptionInfoException:
-                logger.error(f"Crash report {report_name} empty exception info")
+            except PreCheckException as e:
+                logger.error(f"Crash report {report_name} pre-check failed: {e}")
                 statistic.invalid_reports += 1
                 shutil.rmtree(pre_check_report_path)
                 continue
