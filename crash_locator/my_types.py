@@ -1,7 +1,9 @@
-from pydantic import BaseModel
+from typing import Literal
+from pydantic import BaseModel, Field
 import re
 from crash_locator.exceptions import InvalidSignatureException
 from pathlib import Path
+from enum import Enum
 
 
 class PreCheckStatistic(BaseModel):
@@ -17,6 +19,9 @@ class RunStatistic(BaseModel):
     total_reports: int = 0
     valid_reports: int = 0
     invalid_reports: int = 0
+    valid_reports_methods: int = 0
+    dollar_sign_invalid_methods: int = 0
+    empty_signature_methods: int = 0
 
 
 class MethodSignature(BaseModel):
@@ -95,10 +100,95 @@ class MethodSignature(BaseModel):
         return f"{self.package_name}.{self.class_name}{'.' + self.inner_class if self.inner_class else ''}: {self.return_type} {self.method_name}({params})"
 
 
+class CandidateReason(BaseModel):
+    reason_type: str
+
+    def reason_explanation(self) -> str:
+        pass
+
+
+class ReasonTypeLiteral(Enum):
+    KEY_VAR_TERMINAL = "Key Variable Related 1"
+    KEY_VAR_NON_TERMINAL = "Key Variable Related 2"
+    KEY_API_INVOKED = "Key API Related 1"
+    KEY_API_EXECUTED = "Key API Related 2 (Executed)"
+    KEY_VAR_MODIFIED_FIELD = "Key Variable Related 4"
+    NOT_OVERRIDE_METHOD = "Not Override Method 1"
+    NOT_OVERRIDE_METHOD_EXECUTED = "Not Override Method 2 (Executed)"
+    FRAMEWORK_RECALL = "Framework Recall"
+
+
+class KeyVarTerminalReason(CandidateReason):
+    reason_type: Literal[ReasonTypeLiteral.KEY_VAR_TERMINAL] = (
+        ReasonTypeLiteral.KEY_VAR_TERMINAL
+    )
+    framework_entry_api: str
+    call_chain_to_entry: list[str]
+    terminal_api: str
+
+
+class KeyVarNonTerminalReason(CandidateReason):
+    reason_type: Literal[ReasonTypeLiteral.KEY_VAR_NON_TERMINAL] = (
+        ReasonTypeLiteral.KEY_VAR_NON_TERMINAL
+    )
+    framework_entry_api: str
+    call_chain_to_terminal: list[str]
+    terminal_api: str
+
+
+class KeyApiInvokedReason(CandidateReason):
+    reason_type: Literal[ReasonTypeLiteral.KEY_API_INVOKED] = (
+        ReasonTypeLiteral.KEY_API_INVOKED
+    )
+    key_api: str
+    key_field: list[str]
+
+
+class KeyApiExecutedReason(CandidateReason):
+    reason_type: Literal[ReasonTypeLiteral.KEY_API_EXECUTED] = (
+        ReasonTypeLiteral.KEY_API_EXECUTED
+    )
+
+
+class KeyVarModifiedFieldReason(CandidateReason):
+    reason_type: Literal[ReasonTypeLiteral.KEY_VAR_MODIFIED_FIELD] = (
+        ReasonTypeLiteral.KEY_VAR_MODIFIED_FIELD
+    )
+    field: str
+    api: str
+
+
+class NotOverrideMethodReason(CandidateReason):
+    reason_type: Literal[ReasonTypeLiteral.NOT_OVERRIDE_METHOD] = (
+        ReasonTypeLiteral.NOT_OVERRIDE_METHOD
+    )
+
+
+class NotOverrideMethodExecutedReason(CandidateReason):
+    reason_type: Literal[ReasonTypeLiteral.NOT_OVERRIDE_METHOD_EXECUTED] = (
+        ReasonTypeLiteral.NOT_OVERRIDE_METHOD_EXECUTED
+    )
+
+
+class FrameworkRecallReason(CandidateReason):
+    reason_type: Literal[ReasonTypeLiteral.FRAMEWORK_RECALL] = (
+        ReasonTypeLiteral.FRAMEWORK_RECALL
+    )
+
+
 class Candidate(BaseModel):
     name: str
     signature: MethodSignature
-    reasons: list[dict]
+    reasons: (
+        KeyVarTerminalReason
+        | KeyVarNonTerminalReason
+        | KeyApiInvokedReason
+        | KeyApiExecutedReason
+        | KeyVarModifiedFieldReason
+        | NotOverrideMethodReason
+        | NotOverrideMethodExecutedReason
+        | FrameworkRecallReason
+    ) = Field(discriminator="reason_type")
 
 
 class ReportInfo(BaseModel):
@@ -109,6 +199,9 @@ class ReportInfo(BaseModel):
     crash_message: str
     stack_trace: list[str]
     stack_trace_short_api: list[str]
+    framework_trace: list[str]
+    framework_trace_short_api: list[str]
+    framework_entry_api: str
     candidates: list[Candidate]
     ets_related_type: str
     related_variable_type: str

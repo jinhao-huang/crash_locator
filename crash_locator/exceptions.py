@@ -16,6 +16,12 @@ class InvalidSignatureException(PreCheckException):
         super().__init__(self.message)
 
 
+class InvalidFrameworkStackException(PreCheckException):
+    def __init__(self, message="Invalid framework stack"):
+        self.message = message
+        super().__init__(self.message)
+
+
 class MethodCodeException(Exception):
     def __init__(self, message="Method code cannot be retrieved"):
         self.message = message

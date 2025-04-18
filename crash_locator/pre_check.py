@@ -1,13 +1,34 @@
 import logging
+import traceback
 from crash_locator.config import Config
-from crash_locator.my_types import ReportInfo
-from crash_locator.exceptions import EmptyExceptionInfoException, PreCheckException
+from crash_locator.my_types import ReportInfo, CandidateReason
+from crash_locator.my_types import (
+    KeyVarTerminalReason,
+    KeyVarNonTerminalReason,
+    KeyApiInvokedReason,
+    KeyApiExecutedReason,
+    KeyVarModifiedFieldReason,
+    NotOverrideMethodReason,
+    NotOverrideMethodExecutedReason,
+    FrameworkRecallReason,
+)
+from crash_locator.exceptions import (
+    EmptyExceptionInfoException,
+    PreCheckException,
+    InvalidFrameworkStackException,
+)
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 from pathlib import Path
 import json
 import shutil
-from crash_locator.my_types import PreCheckStatistic, Candidate, MethodSignature
+from crash_locator.my_types import (
+    PreCheckStatistic,
+    Candidate,
+    MethodSignature,
+    ReasonTypeLiteral,
+)
+from crash_locator.utils.helper import get_method_type, MethodType
 
 logger = logging.getLogger(__name__)
 
@@ -116,10 +137,131 @@ def report_completion(report):
     report["Crash Info in Dataset"]["stack trace signature"] = stack_trace
 
 
+def find_terminal_api(candidates: list[dict]) -> str | None:
+    for candidate in candidates:
+        for reason in candidate["Reasons"]:
+            if reason.get("M_app Is Terminate?") is True:
+                return candidate["Candidate Signature"]
+
+    return None
+
+
+def get_framework_stack(
+    stack_trace: list[str], stack_trace_short_api: list[str]
+) -> tuple[list[str], list[str]]:
+    framework_trace = []
+    framework_short_trace = []
+    divider_index = None
+
+    for index, (method, method_short_api) in enumerate(
+        zip(stack_trace, stack_trace_short_api)
+    ):
+        method_type = get_method_type(method)
+        if method_type == MethodType.ANDROID:
+            framework_trace.append(method)
+            framework_short_trace.append(method_short_api)
+        elif method_type == MethodType.ANDROID_SUPPORT:
+            framework_trace.append(method)
+            framework_short_trace.append(method_short_api)
+        elif method_type == MethodType.JAVA:
+            raise InvalidFrameworkStackException("Java method in framework stack trace")
+        elif method_type == MethodType.APPLICATION:
+            divider_index = index
+            break
+
+    if len(framework_trace) == 0 or divider_index is None:
+        raise InvalidFrameworkStackException(
+            f"Invalid framework stack trace: {stack_trace}"
+        )
+
+    return framework_trace, framework_short_trace
+
+
+def candidate_into_reason(
+    candidate: dict, framework_entry_api: str, terminal_api: str | None
+) -> CandidateReason:
+    def _extract_var4_field_and_passed_method(explanation_info):
+        import re
+
+        pattern = "Value of the (\d+) parameter \(start from 0\) in API (\S+) may be wrong and trigger crash\. Method \S+ modify the field variable (\<[\S ]+\>), which may influence the buggy parameter value\."
+
+        m = re.match(pattern, explanation_info)
+        if m:
+            index, api, field = m.groups()
+            return int(index), api, field
+
+    candidate_reason = candidate["Reasons"][0]
+    reason_type = candidate_reason["Explanation Type"]
+    if reason_type == ReasonTypeLiteral.KEY_VAR_TERMINAL.value:
+        call_chain_to_entry = candidate_reason["M_app Trace to Crash API"]
+        terminal_api = call_chain_to_entry[0]
+
+        return KeyVarTerminalReason(
+            framework_entry_api=framework_entry_api,
+            call_chain_to_entry=call_chain_to_entry,
+            terminal_api=terminal_api,
+        )
+    elif reason_type == ReasonTypeLiteral.KEY_VAR_NON_TERMINAL.value:
+        if terminal_api is not None:
+            call_methods = candidate_reason["M_app Trace to Crash API"]
+            call_chain_to_terminal = []
+            for method in call_methods:
+                call_chain_to_terminal.append(method)
+                if method == terminal_api:
+                    break
+        else:
+            raise NotImplementedError(
+                "Non-terminal key variable explanation is not implemented yet"
+            )
+        return KeyVarNonTerminalReason(
+            framework_entry_api=framework_entry_api,
+            call_chain_to_terminal=call_chain_to_terminal,
+            terminal_api=terminal_api,
+        )
+    elif reason_type == ReasonTypeLiteral.KEY_API_INVOKED.value:
+        key_api = candidate_reason["M_frame Triggered KeyAPI"]
+        key_field = candidate_reason["M_frame Influenced Field"]
+        return KeyApiInvokedReason(
+            key_api=key_api,
+            key_field=key_field,
+        )
+    elif reason_type == ReasonTypeLiteral.KEY_API_EXECUTED.value:
+        return KeyApiExecutedReason()
+    elif reason_type == ReasonTypeLiteral.KEY_VAR_MODIFIED_FIELD.value:
+        _, api, field = _extract_var4_field_and_passed_method(
+            candidate_reason["Explanation Info"]
+        )
+        return KeyVarModifiedFieldReason(
+            field=field,
+            api=api,
+        )
+    elif reason_type == ReasonTypeLiteral.NOT_OVERRIDE_METHOD.value:
+        return NotOverrideMethodReason()
+    elif reason_type == ReasonTypeLiteral.NOT_OVERRIDE_METHOD_EXECUTED.value:
+        return NotOverrideMethodExecutedReason()
+    elif reason_type == ReasonTypeLiteral.FRAMEWORK_RECALL.value:
+        return FrameworkRecallReason()
+    else:
+        raise NotImplementedError(f"Reason type {reason_type} is not implemented")
+
+
 def pre_check(pre_check_reports_dir: Path):
     report_name = pre_check_reports_dir.name
     crash_report_path = pre_check_reports_dir / f"{report_name}.json"
     report = json.load(open(crash_report_path, "r"))
+    stack_trace = [
+        method.strip("<>")
+        for method in report["Crash Info in Dataset"]["stack trace signature"]
+    ]
+
+    stack_trace_short_api = report["Crash Info in Dataset"]["stack trace"]
+    framework_trace, framework_short_trace = get_framework_stack(
+        stack_trace, stack_trace_short_api
+    )
+    framework_entry_api = framework_trace[-1]
+    terminal_api = find_terminal_api(
+        report["Fault Localization by CrashTracker"]["Buggy Method Candidates"]
+    )
 
     if len(report["Fault Localization by CrashTracker"]["Exception Info"]) == 0:
         raise EmptyExceptionInfoException(f"Empty exception info for {report_name}")
@@ -146,18 +288,20 @@ def pre_check(pre_check_reports_dir: Path):
         related_condition_type=report["Fault Localization by CrashTracker"][
             "Exception Info"
         ]["Related Condition Type"],
-        stack_trace=[
-            method.strip("<>")
-            for method in report["Crash Info in Dataset"]["stack trace signature"]
-        ],
-        stack_trace_short_api=report["Crash Info in Dataset"]["stack trace"],
+        stack_trace=stack_trace,
+        stack_trace_short_api=stack_trace_short_api,
+        framework_trace=framework_trace,
+        framework_trace_short_api=framework_short_trace,
+        framework_entry_api=framework_entry_api,
         candidates=[
             Candidate(
                 name=candidate["Candidate Name"],
                 signature=MethodSignature.from_str(candidate["Candidate Signature"])
                 if candidate["Candidate Signature"] != ""
                 else MethodSignature.from_str(candidate["Candidate Name"]),
-                reasons=candidate["Reasons"],
+                reasons=candidate_into_reason(
+                    candidate, framework_entry_api, terminal_api
+                ),
             )
             for candidate in report["Fault Localization by CrashTracker"][
                 "Buggy Method Candidates"
@@ -179,6 +323,7 @@ if __name__ == "__main__":
 
     with logging_redirect_tqdm():
         for crash_report_dir in tqdm(list(work_list)):
+            statistic.total_reports += 1
             report_name = crash_report_dir.name
             crash_report_path = crash_report_dir / f"{report_name}.json"
             if not crash_report_path.exists():
@@ -197,9 +342,14 @@ if __name__ == "__main__":
                 statistic.invalid_reports += 1
                 shutil.rmtree(pre_check_report_path)
                 continue
+            except Exception:
+                logger.error(traceback.format_exc())
+                logger.error(f"Crash report path: {crash_report_dir}")
+                exit(1)
 
             logger.info(f"Crash report {report_name} pre-checked")
             statistic.valid_reports += 1
 
     with open(Config.PRE_CHECK_STATISTIC_PATH, "w") as f:
+        logger.info(f"Pre-check statistic: {statistic}")
         f.write(statistic.model_dump_json(indent=4))
