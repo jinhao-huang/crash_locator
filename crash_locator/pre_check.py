@@ -193,59 +193,60 @@ def candidate_into_reason(
 
     candidate_reason = candidate["Reasons"][0]
     reason_type = candidate_reason["Explanation Type"]
-    if reason_type == ReasonTypeLiteral.KEY_VAR_TERMINAL.value:
-        call_chain_to_entry = candidate_reason["M_app Trace to Crash API"]
-        terminal_api = call_chain_to_entry[0]
+    match reason_type:
+        case ReasonTypeLiteral.KEY_VAR_TERMINAL:
+            call_chain_to_entry = candidate_reason["M_app Trace to Crash API"]
+            terminal_api = call_chain_to_entry[0]
 
-        return KeyVarTerminalReason(
-            framework_entry_api=framework_entry_api,
-            call_chain_to_entry=call_chain_to_entry,
-            terminal_api=terminal_api,
-        )
-    elif reason_type == ReasonTypeLiteral.KEY_VAR_NON_TERMINAL.value:
-        if terminal_api is not None:
-            call_methods = candidate_reason["M_app Trace to Crash API"]
-            call_chain_to_terminal = []
-            for method in call_methods:
-                call_chain_to_terminal.append(method)
-                if method == terminal_api:
-                    break
-        else:
-            raise NotImplementedError(
-                "Non-terminal key variable explanation is not implemented yet"
+            return KeyVarTerminalReason(
+                framework_entry_api=framework_entry_api,
+                call_chain_to_entry=call_chain_to_entry,
+                terminal_api=terminal_api,
             )
-        return KeyVarNonTerminalReason(
-            framework_entry_api=framework_entry_api,
-            call_chain_to_terminal=call_chain_to_terminal,
-            terminal_api=terminal_api,
-        )
-    elif reason_type == ReasonTypeLiteral.KEY_API_INVOKED.value:
-        key_api = candidate_reason["M_frame Triggered KeyAPI"]
-        key_field = candidate_reason["M_frame Influenced Field"]
-        return KeyApiInvokedReason(
-            key_api=key_api,
-            key_field=key_field,
-        )
-    elif reason_type == ReasonTypeLiteral.KEY_API_EXECUTED.value:
-        return KeyApiExecutedReason()
-    elif reason_type == ReasonTypeLiteral.KEY_VAR_MODIFIED_FIELD.value:
-        _, api, field = _extract_var4_field_and_passed_method(
-            candidate_reason["Explanation Info"]
-        )
-        return KeyVarModifiedFieldReason(
-            field=field,
-            api=api,
-        )
-    elif reason_type == ReasonTypeLiteral.NOT_OVERRIDE_METHOD.value:
-        return NotOverrideMethodReason()
-    elif reason_type == ReasonTypeLiteral.NOT_OVERRIDE_METHOD_EXECUTED.value:
-        return NotOverrideMethodExecutedReason()
-    elif reason_type == ReasonTypeLiteral.FRAMEWORK_RECALL.value:
-        return FrameworkRecallReason()
-    elif reason_type == ReasonTypeLiteral.KEY_VAR_3.value:
-        return KeyVar3Reason()
-    else:
-        raise NotImplementedError(f"Reason type {reason_type} is not implemented")
+        case ReasonTypeLiteral.KEY_VAR_NON_TERMINAL:
+            if terminal_api is not None:
+                call_methods = candidate_reason["M_app Trace to Crash API"]
+                call_chain_to_terminal = []
+                for method in call_methods:
+                    call_chain_to_terminal.append(method)
+                    if method == terminal_api:
+                        break
+            else:
+                raise NotImplementedError(
+                    "Non-terminal key variable explanation is not implemented yet"
+                )
+            return KeyVarNonTerminalReason(
+                framework_entry_api=framework_entry_api,
+                call_chain_to_terminal=call_chain_to_terminal,
+                terminal_api=terminal_api,
+            )
+        case ReasonTypeLiteral.KEY_API_INVOKED:
+            key_api = candidate_reason["M_frame Triggered KeyAPI"]
+            key_field = candidate_reason["M_frame Influenced Field"]
+            return KeyApiInvokedReason(
+                key_api=key_api,
+                key_field=key_field,
+            )
+        case ReasonTypeLiteral.KEY_API_EXECUTED:
+            return KeyApiExecutedReason()
+        case ReasonTypeLiteral.KEY_VAR_MODIFIED_FIELD:
+            _, api, field = _extract_var4_field_and_passed_method(
+                candidate_reason["Explanation Info"]
+            )
+            return KeyVarModifiedFieldReason(
+                field=field,
+                api=api,
+            )
+        case ReasonTypeLiteral.NOT_OVERRIDE_METHOD:
+            return NotOverrideMethodReason()
+        case ReasonTypeLiteral.NOT_OVERRIDE_METHOD_EXECUTED:
+            return NotOverrideMethodExecutedReason()
+        case ReasonTypeLiteral.FRAMEWORK_RECALL:
+            return FrameworkRecallReason()
+        case ReasonTypeLiteral.KEY_VAR_3:
+            return KeyVar3Reason()
+        case _:
+            raise NotImplementedError(f"Reason type {reason_type} is not implemented")
 
 
 def pre_check(pre_check_reports_dir: Path):
