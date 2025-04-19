@@ -6,6 +6,8 @@ load_dotenv()
 
 
 class Config:
+    LOG_LEVEL: str = os.environ.get("LOG_LEVEL", "INFO")
+
     ROOT_DIR: Path = Path.cwd()
 
     CRASH_REPORTS_DIR: Path = ROOT_DIR / "Data" / "crash_reports" / "all-0119"

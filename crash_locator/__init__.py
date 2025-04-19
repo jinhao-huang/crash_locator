@@ -1,6 +1,7 @@
 from beartype.claw import beartype_this_package  # <-- boilerplate for victory
 import logging
 import sys
+from crash_locator.config import Config
 
 beartype_this_package()
 
@@ -10,4 +11,4 @@ streamHandler.setFormatter(
     logging.Formatter("(%(asctime)s)[%(levelname)s] %(message)s")
 )
 logger.addHandler(streamHandler)
-logger.setLevel(logging.ERROR)
+logger.setLevel(Config.LOG_LEVEL)
