@@ -3,13 +3,14 @@ from pydantic import BaseModel, Field
 import re
 from crash_locator.exceptions import InvalidSignatureException
 from pathlib import Path
-from enum import Enum
+from enum import StrEnum
 
 
 class PreCheckStatistic(BaseModel):
     total_reports: int = 0
     valid_reports: int = 0
     invalid_reports: int = 0
+    invalid_report_exception: dict[str, int] = Field(default_factory=dict)
 
 
 class RunStatistic(BaseModel):
@@ -107,7 +108,7 @@ class CandidateReason(BaseModel):
         pass
 
 
-class ReasonTypeLiteral(Enum):
+class ReasonTypeLiteral(StrEnum):
     KEY_VAR_TERMINAL = "Key Variable Related 1"
     KEY_VAR_NON_TERMINAL = "Key Variable Related 2"
     KEY_API_INVOKED = "Key API Related 1"
@@ -116,6 +117,7 @@ class ReasonTypeLiteral(Enum):
     NOT_OVERRIDE_METHOD = "Not Override Method 1"
     NOT_OVERRIDE_METHOD_EXECUTED = "Not Override Method 2 (Executed)"
     FRAMEWORK_RECALL = "Framework Recall"
+    KEY_VAR_3 = "Key Variable Related 3"
 
 
 class KeyVarTerminalReason(CandidateReason):
@@ -176,6 +178,11 @@ class FrameworkRecallReason(CandidateReason):
     )
 
 
+# TODO: Need to be implemented
+class KeyVar3Reason(CandidateReason):
+    reason_type: Literal[ReasonTypeLiteral.KEY_VAR_3] = ReasonTypeLiteral.KEY_VAR_3
+
+
 class Candidate(BaseModel):
     name: str
     signature: MethodSignature
@@ -188,6 +195,7 @@ class Candidate(BaseModel):
         | NotOverrideMethodReason
         | NotOverrideMethodExecutedReason
         | FrameworkRecallReason
+        | KeyVar3Reason
     ) = Field(discriminator="reason_type")
 
 

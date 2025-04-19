@@ -8,9 +8,10 @@ load_dotenv()
 class Config:
     ROOT_DIR: Path = Path.cwd()
 
-    CRASH_REPORTS_DIR: Path = ROOT_DIR / "Data" / "crash_reports" / "all-0328"
+    CRASH_REPORTS_DIR: Path = ROOT_DIR / "Data" / "crash_reports" / "all-0119"
 
     DEBUG: bool = os.environ.get("DEBUG", "false").lower() == "true"
+    DEBUG_CRASH_REPORT_DIR: Path = Path(os.environ.get("DEBUG_CRASH_REPORT_DIR"))
     DEBUG_PRE_CHECK_REPORT_DIR: Path = Path(
         os.environ.get("DEBUG_PRE_CHECK_REPORT_DIR")
     )

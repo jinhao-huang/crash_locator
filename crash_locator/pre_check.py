@@ -11,6 +11,7 @@ from crash_locator.my_types import (
     NotOverrideMethodReason,
     NotOverrideMethodExecutedReason,
     FrameworkRecallReason,
+    KeyVar3Reason,
 )
 from crash_locator.exceptions import (
     EmptyExceptionInfoException,
@@ -241,6 +242,8 @@ def candidate_into_reason(
         return NotOverrideMethodExecutedReason()
     elif reason_type == ReasonTypeLiteral.FRAMEWORK_RECALL.value:
         return FrameworkRecallReason()
+    elif reason_type == ReasonTypeLiteral.KEY_VAR_3.value:
+        return KeyVar3Reason()
     else:
         raise NotImplementedError(f"Reason type {reason_type} is not implemented")
 
@@ -249,11 +252,15 @@ def pre_check(pre_check_reports_dir: Path):
     report_name = pre_check_reports_dir.name
     crash_report_path = pre_check_reports_dir / f"{report_name}.json"
     report = json.load(open(crash_report_path, "r"))
+
+    if len(report["Fault Localization by CrashTracker"]["Exception Info"]) == 0:
+        raise EmptyExceptionInfoException(f"Empty exception info for {report_name}")
+    report_completion(report)
+
     stack_trace = [
         method.strip("<>")
         for method in report["Crash Info in Dataset"]["stack trace signature"]
     ]
-
     stack_trace_short_api = report["Crash Info in Dataset"]["stack trace"]
     framework_trace, framework_short_trace = get_framework_stack(
         stack_trace, stack_trace_short_api
@@ -262,11 +269,6 @@ def pre_check(pre_check_reports_dir: Path):
     terminal_api = find_terminal_api(
         report["Fault Localization by CrashTracker"]["Buggy Method Candidates"]
     )
-
-    if len(report["Fault Localization by CrashTracker"]["Exception Info"]) == 0:
-        raise EmptyExceptionInfoException(f"Empty exception info for {report_name}")
-
-    report_completion(report)
 
     report_info = ReportInfo(
         apk_name=report["Crash Info in Dataset"]["Apk name"],
@@ -319,7 +321,10 @@ if __name__ == "__main__":
     crash_reports_dir = Config.CRASH_REPORTS_DIR
     pre_check_reports_dir = Config.PRE_CHECK_REPORTS_DIR
     statistic = PreCheckStatistic()
-    work_list = crash_reports_dir.iterdir()
+    if Config.DEBUG:
+        work_list = [Config.DEBUG_CRASH_REPORT_DIR]
+    else:
+        work_list = crash_reports_dir.iterdir()
 
     with logging_redirect_tqdm():
         for crash_report_dir in tqdm(list(work_list)):
@@ -341,6 +346,9 @@ if __name__ == "__main__":
                 logger.error(f"Crash report {report_name} pre-check failed: {e}")
                 statistic.invalid_reports += 1
                 shutil.rmtree(pre_check_report_path)
+                if e.__class__.__name__ not in statistic.invalid_report_exception:
+                    statistic.invalid_report_exception[e.__class__.__name__] = 0
+                statistic.invalid_report_exception[e.__class__.__name__] += 1
                 continue
             except Exception:
                 logger.error(traceback.format_exc())
