@@ -1,6 +1,5 @@
 import logging
-import traceback
-from crash_locator.config import Config
+from crash_locator.config import Config, setup_logging
 from crash_locator.my_types import ReportInfo, CandidateReason
 from crash_locator.my_types import (
     KeyVarTerminalReason,
@@ -332,6 +331,8 @@ def pre_check(pre_check_reports_dir: Path):
 
 
 if __name__ == "__main__":
+    setup_logging(Config.PRE_CHECK_LOG_FILE_PATH)
+
     crash_reports_dir = Config.CRASH_REPORTS_DIR
     pre_check_reports_dir = Config.PRE_CHECK_REPORTS_DIR
     statistic = PreCheckStatistic()
@@ -367,9 +368,12 @@ if __name__ == "__main__":
                     statistic.invalid_report_exception[e.__class__.__name__] = 0
                 statistic.invalid_report_exception[e.__class__.__name__] += 1
                 continue
-            except Exception:
-                logger.error(traceback.format_exc())
-                logger.error(f"Crash report path: {crash_report_dir}")
+            except Exception as e:
+                logger.exception(e)
+                logger.critical(
+                    f"Crash report {report_name} pre-check raise unexpected exception"
+                )
+                logger.critical(f"Crash report path: {crash_report_dir}")
                 exit(1)
 
             logger.info(f"Crash report {report_name} pre-check finished")

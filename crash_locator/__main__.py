@@ -1,4 +1,4 @@
-from crash_locator.config import Config
+from crash_locator.config import Config, setup_logging
 from crash_locator.utils.java_parser import get_application_code
 from crash_locator.my_types import ReportInfo, RunStatistic
 from crash_locator.exceptions import MethodCodeException
@@ -10,6 +10,8 @@ import json
 logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
+    setup_logging(Config.RESULT_LOG_FILE_PATH)
+
     statistic = RunStatistic()
     if Config.DEBUG:
         work_list = [Config.DEBUG_PRE_CHECK_REPORT_DIR]
@@ -61,4 +63,4 @@ if __name__ == "__main__":
                 statistic.valid_reports += 1
                 statistic.valid_reports_methods += len(report_info.candidates)
 
-    print(statistic)
+    logger.info(f"Statistic: {statistic}")
