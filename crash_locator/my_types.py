@@ -22,6 +22,7 @@ class PreCheckStatistic(BaseModel):
 class ReportStatus(StrEnum):
     FINISHED = "finished"
     SKIPPED = "skipped"
+    TEMPORARY_SKIPPED = "temporary_skipped"
 
 
 class FinishedReportInfo(BaseModel):
@@ -33,6 +34,13 @@ class FinishedReportInfo(BaseModel):
 
 class SkippedReportInfo(BaseModel):
     report_status: Literal[ReportStatus.SKIPPED] = ReportStatus.SKIPPED
+
+
+class TemporarySkippedReportInfo(BaseModel):
+    report_status: Literal[ReportStatus.TEMPORARY_SKIPPED] = (
+        ReportStatus.TEMPORARY_SKIPPED
+    )
+    reason: str
 
 
 class RunStatistic(BaseModel):
@@ -56,7 +64,8 @@ class RunStatistic(BaseModel):
     finished_reports: dict[
         str,
         Annotated[
-            FinishedReportInfo | SkippedReportInfo, Field(discriminator="report_status")
+            FinishedReportInfo | SkippedReportInfo | TemporarySkippedReportInfo,
+            Field(discriminator="report_status"),
         ],
     ] = Field(
         default_factory=dict,

@@ -6,6 +6,7 @@ from crash_locator.my_types import (
     Candidate,
     FinishedReportInfo,
     SkippedReportInfo,
+    TemporarySkippedReportInfo,
 )
 from crash_locator.exceptions import MethodCodeException
 from crash_locator.utils.llm import query_filter_candidate
@@ -27,6 +28,16 @@ def llm_filter(report_info: ReportInfo) -> list[Candidate]:
     return query_filter_candidate(report_info)
 
 
+# Check if the buggy method is filtered
+def _is_buggy_method_filtered(
+    report_info: ReportInfo, remaining_candidates: list[Candidate]
+) -> bool:
+    for candidate in remaining_candidates:
+        if candidate.signature == report_info.buggy_method:
+            return True
+    return False
+
+
 def filter_statistic(
     report_info: ReportInfo,
     remaining_candidates: list[Candidate],
@@ -35,11 +46,8 @@ def filter_statistic(
     statistic.processed_reports += 1
     filtered_methods_nums = len(report_info.candidates) - len(remaining_candidates)
     statistic.filtered_method_count += filtered_methods_nums
-    for candidate in remaining_candidates:
-        if candidate.signature == report_info.buggy_method:
-            return
-
-    statistic.filtered_buggy_method_count += 1
+    if _is_buggy_method_filtered(report_info, remaining_candidates):
+        statistic.filtered_buggy_method_count += 1
 
 
 def save_statistic(statistic: RunStatistic):
@@ -82,21 +90,28 @@ if __name__ == "__main__":
                 with open(report_path, "r") as f:
                     report_info = ReportInfo(**json.load(f))
 
+            if len(report_info.candidates) == 1:
+                statistic.finished_reports[report_name] = SkippedReportInfo()
+                continue
+            elif len(report_info.candidates) <= 3:
+                statistic.finished_reports[report_name] = TemporarySkippedReportInfo(
+                    reason=f"Only {len(report_info.candidates)} candidates"
+                )
+                continue
+
             invalid_report_flag = False
             for candidate in report_info.candidates:
                 candidate_signature = candidate.signature
                 logger.info(f"Processing candidate {candidate_signature}")
                 try:
-                    if len(report_info.candidates) == 1:
-                        statistic.finished_reports[report_name] = SkippedReportInfo()
-                        continue
                     remaining_candidates = llm_filter(report_info)
                     filter_statistic(report_info, remaining_candidates, statistic)
                     statistic.finished_reports[report_name] = FinishedReportInfo(
                         total_candidates_count=len(report_info.candidates),
                         remaining_candidates_count=len(remaining_candidates),
-                        is_buggy_method_filtered=report_info.buggy_method
-                        not in [c.signature for c in remaining_candidates],
+                        is_buggy_method_filtered=_is_buggy_method_filtered(
+                            report_info, remaining_candidates
+                        ),
                     )
                 except MethodCodeException as e:
                     logger.error(
