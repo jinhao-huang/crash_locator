@@ -66,6 +66,16 @@ def _save_conversation(conversation: list[ChatCompletionMessageParam], dir: Path
             f.write(f"```text\n{message['content']}\n```\n")
 
 
+def _save_remaining_candidates(candidates: list[Candidate], dir: Path):
+    dir.mkdir(parents=True, exist_ok=True)
+    with open(dir / "remaining_candidates.json", "w") as f:
+        json.dump(
+            [candidate.model_dump() for candidate in candidates],
+            f,
+            indent=4,
+        )
+
+
 def query_filter_candidate(report_info: ReportInfo) -> list[Candidate]:
     messages = [
         ChatCompletionSystemMessageParam(
@@ -94,6 +104,10 @@ def query_filter_candidate(report_info: ReportInfo) -> list[Candidate]:
             remaining_candidates.append(candidate)
 
     _save_conversation(messages, Config.RESULT_REPORT_FILTER_DIR(report_info.apk_name))
+    _save_remaining_candidates(
+        remaining_candidates,
+        Config.RESULT_REPORT_FILTER_DIR(report_info.apk_name),
+    )
     logger.info(
         f"Candidate filtering completed, before: {len(report_info.candidates)}, after: {len(remaining_candidates)}"
     )

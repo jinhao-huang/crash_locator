@@ -4,8 +4,8 @@ from crash_locator.my_types import (
     ReportInfo,
     RunStatistic,
     Candidate,
-    ReportRunInfo,
-    ReportStatus,
+    FinishedReportInfo,
+    SkippedReportInfo,
 )
 from crash_locator.exceptions import MethodCodeException
 from crash_locator.utils.llm import query_filter_candidate
@@ -88,14 +88,15 @@ if __name__ == "__main__":
                 logger.info(f"Processing candidate {candidate_signature}")
                 try:
                     if len(report_info.candidates) == 1:
-                        statistic.finished_reports[report_name] = ReportRunInfo(
-                            status=ReportStatus.SKIPPED
-                        )
+                        statistic.finished_reports[report_name] = SkippedReportInfo()
                         continue
                     remaining_candidates = llm_filter(report_info)
                     filter_statistic(report_info, remaining_candidates, statistic)
-                    statistic.finished_reports[report_name] = ReportRunInfo(
-                        status=ReportStatus.FINISHED
+                    statistic.finished_reports[report_name] = FinishedReportInfo(
+                        total_candidates_count=len(report_info.candidates),
+                        remaining_candidates_count=len(remaining_candidates),
+                        is_buggy_method_filtered=report_info.buggy_method
+                        not in [c.signature for c in remaining_candidates],
                     )
                 except MethodCodeException as e:
                     logger.error(

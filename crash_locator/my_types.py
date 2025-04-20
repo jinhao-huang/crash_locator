@@ -1,4 +1,5 @@
 from typing import Literal
+from typing import Annotated
 from pydantic import BaseModel, Field
 import re
 from crash_locator.exceptions import InvalidSignatureException
@@ -23,8 +24,15 @@ class ReportStatus(StrEnum):
     SKIPPED = "skipped"
 
 
-class ReportRunInfo(BaseModel):
-    status: ReportStatus
+class FinishedReportInfo(BaseModel):
+    report_status: Literal[ReportStatus.FINISHED] = ReportStatus.FINISHED
+    total_candidates_count: int
+    remaining_candidates_count: int
+    is_buggy_method_filtered: bool
+
+
+class SkippedReportInfo(BaseModel):
+    report_status: Literal[ReportStatus.SKIPPED] = ReportStatus.SKIPPED
 
 
 class RunStatistic(BaseModel):
@@ -45,7 +53,14 @@ class RunStatistic(BaseModel):
     # Count of methods that have been filtered
     filtered_method_count: int = 0
 
-    finished_reports: dict[str, ReportRunInfo] = Field(default_factory=dict)
+    finished_reports: dict[
+        str,
+        Annotated[
+            FinishedReportInfo | SkippedReportInfo, Field(discriminator="report_status")
+        ],
+    ] = Field(
+        default_factory=dict,
+    )
 
 
 class MethodSignature(BaseModel):
