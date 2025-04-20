@@ -1,10 +1,7 @@
 from crash_locator.config import Config
 from crash_locator.utils.java_parser import get_application_code
-from crash_locator.my_types import MethodSignature, ReportInfo, RunStatistic
-from crash_locator.exceptions import (
-    MethodCodeException,
-    InvalidSignatureException,
-)
+from crash_locator.my_types import ReportInfo, RunStatistic
+from crash_locator.exceptions import MethodCodeException
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 import logging
@@ -21,9 +18,8 @@ if __name__ == "__main__":
 
     with logging_redirect_tqdm():
         for pre_check_report_dir in tqdm(list(work_list), desc="Processing reports"):
-            logger.info(
-                f"Processing report {pre_check_report_dir.name}, file: {pre_check_report_dir}"
-            )
+            logger.info(f"Processing report {pre_check_report_dir.name}")
+            logger.debug(f"Report path: {pre_check_report_dir}")
             report_name = pre_check_report_dir.name
             report_path = pre_check_report_dir / Config.PRE_CHECK_REPORT_INFO_NAME
             if not report_path.exists():
@@ -42,12 +38,15 @@ if __name__ == "__main__":
                     application_code = get_application_code(
                         report_info.apk_name, candidate_signature
                     )
+                    reason = candidate.reasons.reason_explanation()
                 except MethodCodeException as e:
                     logger.error(
-                        f"Error processing candidate {candidate_signature}: {e}"
+                        f"Error processing candidate `{candidate_signature}`: {e}"
                     )
                     statistic.invalid_methods += 1
                     invalid_report_flag = True
+                    if "$" in candidate_signature:
+                        statistic.dollar_sign_invalid_methods += 1
                     continue
 
                 statistic.valid_methods += 1
@@ -59,5 +58,6 @@ if __name__ == "__main__":
                 )
             else:
                 statistic.valid_reports += 1
+                statistic.valid_reports_methods += len(report_info.candidates)
 
     print(statistic)
