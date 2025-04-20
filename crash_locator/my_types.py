@@ -11,6 +11,8 @@ class PreCheckStatistic(BaseModel):
     valid_reports: int = 0
     invalid_reports: int = 0
     invalid_report_exception: dict[str, int] = Field(default_factory=dict)
+    exist_buggy_methods: int = 0
+    no_buggy_methods: int = 0
 
 
 class RunStatistic(BaseModel):
@@ -99,6 +101,29 @@ class MethodSignature(BaseModel):
     def __str__(self) -> str:
         params = ", ".join(self.parameters) if self.parameters else ""
         return f"{self.package_name}.{self.class_name}{'.' + self.inner_class if self.inner_class else ''}: {self.return_type} {self.method_name}({params})"
+
+    def __eq__(self, other: "MethodSignature") -> bool:
+        if self.package_name != other.package_name:
+            return False
+        if self.class_name != other.class_name:
+            return False
+        if self.inner_class != other.inner_class:
+            return False
+        if self.method_name != other.method_name:
+            return False
+        if (
+            self.return_type is not None
+            and other.return_type is not None
+            and self.return_type != other.return_type
+        ):
+            return False
+        if (
+            self.parameters is not None
+            and other.parameters is not None
+            and self.parameters != other.parameters
+        ):
+            return False
+        return True
 
 
 class CandidateReason(BaseModel):
@@ -278,6 +303,7 @@ class ReportInfo(BaseModel):
     ets_related_type: str
     related_variable_type: str
     related_condition_type: str
+    buggy_method: MethodSignature
 
     def sort_candidates(self):
         """

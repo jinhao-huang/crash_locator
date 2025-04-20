@@ -261,7 +261,19 @@ def candidate_into_reason(
             raise NotImplementedError(f"Reason type {reason_type} is not implemented")
 
 
-def pre_check(pre_check_reports_dir: Path):
+def post_check_statistic(report: ReportInfo, statistic: PreCheckStatistic):
+    exist_buggy_method = False
+    for candidate in report.candidates:
+        if candidate.signature == report.buggy_method:
+            exist_buggy_method = True
+            break
+    if exist_buggy_method:
+        statistic.exist_buggy_methods += 1
+    else:
+        statistic.no_buggy_methods += 1
+
+
+def pre_check(pre_check_reports_dir: Path) -> ReportInfo:
     report_name = pre_check_reports_dir.name
     crash_report_path = pre_check_reports_dir / f"{report_name}.json"
     report = json.load(open(crash_report_path, "r"))
@@ -323,11 +335,16 @@ def pre_check(pre_check_reports_dir: Path):
             ]
         ],
         crash_message=report["Crash Info in Dataset"]["Crash Message"],
+        buggy_method=MethodSignature.from_str(
+            report["Crash Info in Dataset"]["Labeled Buggy Method"]
+        ),
     )
 
     output_file_path = pre_check_reports_dir / Config.PRE_CHECK_REPORT_INFO_NAME
     with open(output_file_path, "w") as json_file:
         json_file.write(report_info.model_dump_json(indent=4))
+
+    return report_info
 
 
 if __name__ == "__main__":
@@ -359,7 +376,9 @@ if __name__ == "__main__":
             shutil.copy(crash_report_path, pre_check_report_path)
 
             try:
-                pre_check(pre_check_report_path)
+                report_info = pre_check(pre_check_report_path)
+                post_check_statistic(report_info, statistic)
+
             except PreCheckException as e:
                 logger.error(f"Crash report {report_name} pre-check failed: {e}")
                 statistic.invalid_reports += 1
