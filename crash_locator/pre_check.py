@@ -16,6 +16,7 @@ from crash_locator.exceptions import (
     EmptyExceptionInfoException,
     PreCheckException,
     InvalidFrameworkStackException,
+    MethodCodeException,
 )
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
@@ -29,6 +30,7 @@ from crash_locator.my_types import (
     ReasonTypeLiteral,
 )
 from crash_locator.utils.helper import get_method_type, MethodType
+from crash_locator.utils.java_parser import get_application_code
 
 logger = logging.getLogger(__name__)
 
@@ -271,6 +273,19 @@ def post_check_statistic(report: ReportInfo, statistic: PreCheckStatistic):
         statistic.exist_buggy_methods += 1
     else:
         statistic.no_buggy_methods += 1
+
+    try:
+        for candidate in report.candidates:
+            get_application_code(report.apk_name, candidate.signature)
+            candidate.reasons.reason_explanation()
+        if len(report.candidates) not in statistic.candidates_nums_distribution:
+            statistic.candidates_nums_distribution[len(report.candidates)] = 0
+        statistic.candidates_nums_distribution[len(report.candidates)] += 1
+        statistic.candidates_nums_valid += 1
+    except MethodCodeException as e:
+        logger.error(f"Candidate {candidate.signature} code not found")
+        logger.error(e)
+        statistic.candidates_nums_invalid += 1
 
 
 def pre_check(pre_check_reports_dir: Path) -> ReportInfo:

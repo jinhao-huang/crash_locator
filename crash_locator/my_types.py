@@ -13,6 +13,18 @@ class PreCheckStatistic(BaseModel):
     invalid_report_exception: dict[str, int] = Field(default_factory=dict)
     exist_buggy_methods: int = 0
     no_buggy_methods: int = 0
+    candidates_nums_distribution: dict[int, int] = Field(default_factory=dict)
+    candidates_nums_valid: int = 0
+    candidates_nums_invalid: int = 0
+
+
+class ReportStatus(StrEnum):
+    FINISHED = "finished"
+    SKIPPED = "skipped"
+
+
+class ReportRunInfo(BaseModel):
+    status: ReportStatus
 
 
 class RunStatistic(BaseModel):
@@ -25,9 +37,15 @@ class RunStatistic(BaseModel):
     valid_reports_methods: int = 0
     dollar_sign_invalid_methods: int = 0
     empty_signature_methods: int = 0
-    filtered_reports: int = 0
-    filtered_buggy_methods: int = 0
-    filtered_methods: int = 0
+
+    # Processed reports after filtering
+    processed_reports: int = 0
+    # Count of buggy methods that have been filtered
+    filtered_buggy_method_count: int = 0
+    # Count of methods that have been filtered
+    filtered_method_count: int = 0
+
+    finished_reports: dict[str, ReportRunInfo] = Field(default_factory=dict)
 
 
 class MethodSignature(BaseModel):
