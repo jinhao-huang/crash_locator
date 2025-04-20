@@ -238,7 +238,20 @@ def candidate_into_reason(
                 api=api,
             )
         case ReasonTypeLiteral.NOT_OVERRIDE_METHOD:
-            return NotOverrideMethodReason()
+            application_class = candidate_reason["M_app NotOverride Class"]
+            framework_method = candidate_reason[
+                "M_frame Unconditional Exception Method"
+            ]
+            framework_class = candidate_reason[
+                "M_app NotOverride Class Extend M_frame Class"
+            ]
+            extend_chain = candidate_reason["M_app Extend Relationship"]
+            return NotOverrideMethodReason(
+                application_class=application_class,
+                framework_method=framework_method,
+                framework_class=framework_class,
+                extend_chain=extend_chain,
+            )
         case ReasonTypeLiteral.NOT_OVERRIDE_METHOD_EXECUTED:
             return NotOverrideMethodExecutedReason()
         case ReasonTypeLiteral.FRAMEWORK_RECALL:
@@ -337,6 +350,9 @@ if __name__ == "__main__":
                 statistic.invalid_reports += 1
                 continue
 
+            logger.info(f"Pre-checking report {report_name}")
+            logger.debug(f"Crash report directory: {crash_report_dir}")
+            logger.debug(f"Crash report path: {crash_report_path}")
             pre_check_report_path = pre_check_reports_dir / report_name
             pre_check_report_path.mkdir(parents=True, exist_ok=True)
             shutil.copy(crash_report_path, pre_check_report_path)
@@ -356,7 +372,7 @@ if __name__ == "__main__":
                 logger.error(f"Crash report path: {crash_report_dir}")
                 exit(1)
 
-            logger.info(f"Crash report {report_name} pre-checked")
+            logger.info(f"Crash report {report_name} pre-check finished")
             statistic.valid_reports += 1
 
     with open(Config.PRE_CHECK_STATISTIC_PATH, "w") as f:
