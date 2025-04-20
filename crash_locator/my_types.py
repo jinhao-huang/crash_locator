@@ -278,3 +278,21 @@ class ReportInfo(BaseModel):
     ets_related_type: str
     related_variable_type: str
     related_condition_type: str
+
+    def sort_candidates(self):
+        """
+        Sort the candidates by stack trace order
+        """
+        sorted_candidates = []
+
+        for method in self.stack_trace_short_api:
+            for candidate in self.candidates:
+                if candidate.name == method:
+                    sorted_candidates.append(candidate)
+                    break
+
+        for candidate in self.candidates:
+            if candidate not in sorted_candidates:
+                sorted_candidates.append(candidate)
+
+        self.candidates = sorted_candidates

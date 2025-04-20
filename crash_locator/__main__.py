@@ -30,6 +30,7 @@ if __name__ == "__main__":
             with open(report_path, "r") as f:
                 report_info = ReportInfo(**json.load(f))
 
+            report_info.sort_candidates()
             invalid_report_flag = False
             for candidate in report_info.candidates:
                 candidate_signature = candidate.signature
