@@ -11,8 +11,18 @@ class Config:
     ROOT_DIR: Path = Path.cwd()
     DATA_DIR: Path = ROOT_DIR / "Data"
 
+    OPENAI_BASE_URL: str = os.environ.get("OPENAI_BASE_URL")
+    OPENAI_API_KEY: str = os.environ.get("OPENAI_API_KEY")
+    OPENAI_MODEL: str = os.environ.get("OPENAI_MODEL")
+
     RESULT_DIR: Path = DATA_DIR / "results" / datetime.now().strftime("%Y%m%d-%H%M%S")
     RESULT_LOG_FILE_PATH: Path = RESULT_DIR / "app.log"
+
+    def RESULT_REPORT_DIR(apk_name: str) -> Path:
+        return Config.RESULT_DIR / apk_name
+
+    def RESULT_REPORT_FILTER_DIR(apk_name: str) -> Path:
+        return Config.RESULT_REPORT_DIR(apk_name) / "filter"
 
     CRASH_REPORTS_DIR: Path = DATA_DIR / "crash_reports" / "all-0119"
 

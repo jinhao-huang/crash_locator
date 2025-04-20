@@ -25,6 +25,9 @@ class RunStatistic(BaseModel):
     valid_reports_methods: int = 0
     dollar_sign_invalid_methods: int = 0
     empty_signature_methods: int = 0
+    filtered_reports: int = 0
+    filtered_buggy_methods: int = 0
+    filtered_methods: int = 0
 
 
 class MethodSignature(BaseModel):
@@ -305,7 +308,8 @@ class ReportInfo(BaseModel):
     related_condition_type: str
     buggy_method: MethodSignature
 
-    def sort_candidates(self):
+    @property
+    def sorted_candidates(self) -> list[Candidate]:
         """
         Sort the candidates by stack trace order
         """
@@ -321,4 +325,4 @@ class ReportInfo(BaseModel):
             if candidate not in sorted_candidates:
                 sorted_candidates.append(candidate)
 
-        self.candidates = sorted_candidates
+        return sorted_candidates

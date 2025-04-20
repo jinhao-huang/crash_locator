@@ -74,3 +74,15 @@ class MultipleChildrenFoundException(TreeSitterException):
     def __init__(self, message="Multiple children found"):
         self.message = message
         super().__init__(self.message)
+
+
+class LLMException(Exception):
+    def __init__(self, message="LLM exception"):
+        self.message = message
+        super().__init__(self.message)
+
+
+class UnExpectedResponseException(LLMException):
+    def __init__(self, message="Unexpected response from LLM"):
+        self.message = message
+        super().__init__(self.message)

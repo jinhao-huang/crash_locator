@@ -1,13 +1,47 @@
 from crash_locator.config import Config, setup_logging
 from crash_locator.utils.java_parser import get_application_code
-from crash_locator.my_types import ReportInfo, RunStatistic
+from crash_locator.my_types import ReportInfo, RunStatistic, Candidate
 from crash_locator.exceptions import MethodCodeException
+from crash_locator.utils.llm import query_filter_candidate
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 import logging
 import json
 
 logger = logging.getLogger(__name__)
+
+
+def llm_filter(report_info: ReportInfo) -> list[Candidate]:
+    # Check all candidates before querying LLM
+    for candidate in report_info.candidates:
+        get_application_code(report_info.apk_name, candidate.signature)
+        candidate.reasons.reason_explanation()
+
+    # Query LLM
+    remaining_candidates = query_filter_candidate(report_info)
+
+    # Check all candidates after filtering
+    for candidate in remaining_candidates:
+        get_application_code(report_info.apk_name, candidate.signature)
+        candidate.reasons.reason_explanation()
+
+    return remaining_candidates
+
+
+def filter_statistic(
+    report_info: ReportInfo,
+    remaining_candidates: list[Candidate],
+    statistic: RunStatistic,
+):
+    statistic.filtered_reports += 1
+    filtered_methods_nums = len(report_info.candidates) - len(remaining_candidates)
+    statistic.filtered_methods += filtered_methods_nums
+    for candidate in remaining_candidates:
+        if candidate.signature == report_info.buggy_method:
+            return
+
+    statistic.filtered_buggy_methods += 1
+
 
 if __name__ == "__main__":
     setup_logging(Config.RESULT_LOG_FILE_PATH)
@@ -32,19 +66,16 @@ if __name__ == "__main__":
             with open(report_path, "r") as f:
                 report_info = ReportInfo(**json.load(f))
 
-            report_info.sort_candidates()
             invalid_report_flag = False
             for candidate in report_info.candidates:
                 candidate_signature = candidate.signature
                 logger.info(f"Processing candidate {candidate_signature}")
                 try:
-                    application_code = get_application_code(
-                        report_info.apk_name, candidate_signature
-                    )
-                    reason = candidate.reasons.reason_explanation()
+                    remaining_candidates = llm_filter(report_info)
+                    filter_statistic(report_info, remaining_candidates, statistic)
                 except MethodCodeException as e:
                     logger.error(
-                        f"Error processing candidate `{candidate_signature}`: {e}"
+                        f"Candidate `{candidate_signature}` processing failed: {e}"
                     )
                     statistic.invalid_methods += 1
                     invalid_report_flag = True
