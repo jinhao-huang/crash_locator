@@ -86,9 +86,11 @@ def query_filter_candidate(report_info: ReportInfo) -> list[Candidate]:
             )
         )
         messages = _query_llm_with_retry(
-            messages, 3, lambda x: x.strip() == "Yes" or x.strip() == "No"
+            messages,
+            3,
+            lambda x: ("Yes" in x and "No" not in x) or ("No" in x and "Yes" not in x),
         )
-        if messages[-1]["content"].strip() == "Yes":
+        if "Yes" in messages[-1]["content"]:
             remaining_candidates.append(candidate)
 
     _save_conversation(messages, Config.RESULT_REPORT_FILTER_DIR(report_info.apk_name))
