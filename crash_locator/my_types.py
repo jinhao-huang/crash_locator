@@ -128,6 +128,13 @@ class KeyVarTerminalReason(CandidateReason):
     call_chain_to_entry: list[str]
     terminal_api: str
 
+    def reason_explanation(self) -> str:
+        return f"""
+Our static analysis tool detect that some buggy parameter value is passed to `{self.framework_entry_api}` by call chain {self.call_chain_to_entry}.
+
+The buggy parameter meet the crash constraint which was described in `Constraint` part
+"""
+
 
 class KeyVarNonTerminalReason(CandidateReason):
     reason_type: Literal[ReasonTypeLiteral.KEY_VAR_NON_TERMINAL] = (
@@ -137,6 +144,15 @@ class KeyVarNonTerminalReason(CandidateReason):
     call_chain_to_terminal: list[str]
     terminal_api: str
 
+    def reason_explanation(self) -> str:
+        return f"""
+Our static analysis tool detect that the method invoke `{self.terminal_api}` by call chain {self.call_chain_to_terminal}.
+
+`{self.terminal_api}` method pass buggy parameter to `{self.framework_entry_api}`
+
+The buggy parameter meet the crash constraint which was described in `Constraint` part
+"""
+
 
 class KeyApiInvokedReason(CandidateReason):
     reason_type: Literal[ReasonTypeLiteral.KEY_API_INVOKED] = (
@@ -145,11 +161,23 @@ class KeyApiInvokedReason(CandidateReason):
     key_api: str
     key_field: list[str]
 
+    def reason_explanation(self) -> str:
+        return f"""
+We detect that the method `{self.key_api}` is invoked in the method.
+
+The method can affect the `{self.key_field}` field in Android Framework so that cause constraint violation.
+"""
+
 
 class KeyApiExecutedReason(CandidateReason):
     reason_type: Literal[ReasonTypeLiteral.KEY_API_EXECUTED] = (
         ReasonTypeLiteral.KEY_API_EXECUTED
     )
+
+    def reason_explanation(self) -> str:
+        return """
+This method was detected because it was executed during the process of the application crashing.
+"""
 
 
 class KeyVarModifiedFieldReason(CandidateReason):
@@ -159,11 +187,32 @@ class KeyVarModifiedFieldReason(CandidateReason):
     field: str
     api: str
 
+    # TODO: add field effect
+    def reason_explanation(self) -> str:
+        return f"""
+Our static analysis detect that the method change the value of field `{self.field}`
+
+The field was passed to the method `{self.api}` and meet the crash constraint, resulting in the crash.
+"""
+
 
 class NotOverrideMethodReason(CandidateReason):
     reason_type: Literal[ReasonTypeLiteral.NOT_OVERRIDE_METHOD] = (
         ReasonTypeLiteral.NOT_OVERRIDE_METHOD
     )
+    application_class: str
+    framework_method: str
+    framework_class: str
+    extend_chain: list[str]
+
+    def reason_explanation(self) -> str:
+        return f"""
+Our static analysis tool detect that the class `{self.application_class}` extends the class `{self.framework_class}` by chain {self.extend_chain}.
+
+When `{self.framework_method}` is invoked, an unconditional exception is thrown out.
+
+But in the application code, the method is not override.
+"""
 
 
 class NotOverrideMethodExecutedReason(CandidateReason):
@@ -171,16 +220,31 @@ class NotOverrideMethodExecutedReason(CandidateReason):
         ReasonTypeLiteral.NOT_OVERRIDE_METHOD_EXECUTED
     )
 
+    def reason_explanation(self) -> str:
+        return """
+This method was detected because it was executed during the process of the application crashing.
+"""
+
 
 class FrameworkRecallReason(CandidateReason):
     reason_type: Literal[ReasonTypeLiteral.FRAMEWORK_RECALL] = (
         ReasonTypeLiteral.FRAMEWORK_RECALL
     )
 
+    def reason_explanation(self) -> str:
+        return """
+This method is not in the crash stack, it is a recall method invoked by framework method.
+"""
 
-# TODO: Need to be implemented
+
 class KeyVar3Reason(CandidateReason):
     reason_type: Literal[ReasonTypeLiteral.KEY_VAR_3] = ReasonTypeLiteral.KEY_VAR_3
+
+    # TODO: Need more confirmation
+    def reason_explanation(self) -> str:
+        return """
+The method is data related to the crash.
+"""
 
 
 class Candidate(BaseModel):
