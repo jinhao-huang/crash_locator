@@ -58,18 +58,6 @@ class TreeSitterException(Exception):
         super().__init__(self.message)
 
 
-class ParentTypeNotMatchException(TreeSitterException):
-    def __init__(self, message="Parent type not match"):
-        self.message = message
-        super().__init__(self.message)
-
-
-class ChildNotFoundException(TreeSitterException):
-    def __init__(self, message="Child not found"):
-        self.message = message
-        super().__init__(self.message)
-
-
 class MultipleChildrenFoundException(TreeSitterException):
     def __init__(self, message="Multiple children found"):
         self.message = message

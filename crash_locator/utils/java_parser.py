@@ -9,8 +9,6 @@ from crash_locator.exceptions import (
     NoMethodFoundCodeError,
     MethodFileNotFoundException,
     UnknownException,
-    ParentTypeNotMatchException,
-    ChildNotFoundException,
 )
 from crash_locator.utils.tree_sitter_helper import get_parent, get_child
 import logging
@@ -140,18 +138,16 @@ def _anonymous_class_filter(
     if not inner_class.split("$")[-1].isdigit():
         return methods
 
-    filtered_methods = []
+    retained_methods = []
     for method in methods:
-        try:
-            class_body = get_parent(method, "class_body")
-            line_comment = get_child(class_body, "line_comment")
-            if (
-                line_comment is not None
-                and method_signature.full_class_name()
-                in line_comment.text.decode("utf8")
-            ):
-                filtered_methods.append(method)
-        except (ParentTypeNotMatchException, ChildNotFoundException):
+        class_body = get_parent(method, "class_body")
+        if class_body is None:
             continue
+        line_comment = get_child(class_body, "line_comment")
+        if (
+            line_comment is not None
+            and method_signature.full_class_name() in line_comment.text.decode("utf8")
+        ):
+            retained_methods.append(method)
 
-    return filtered_methods
+    return retained_methods
