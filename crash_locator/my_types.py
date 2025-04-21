@@ -5,9 +5,11 @@ import re
 from crash_locator.exceptions import InvalidSignatureException
 from pathlib import Path
 from enum import StrEnum
+from typing import Self
 
 
 class PreCheckStatistic(BaseModel):
+    # Total crash reports
     total_reports: int = 0
     valid_reports: int = 0
     invalid_reports: int = 0
@@ -81,7 +83,7 @@ class MethodSignature(BaseModel):
     parameters: list[str] | None = None
 
     @classmethod
-    def from_str(cls, method_signature: str) -> "MethodSignature":
+    def from_str(cls, method_signature: str) -> Self:
         """
         Example Method Signature:
         1. android.view.ViewRoot: void checkThread()

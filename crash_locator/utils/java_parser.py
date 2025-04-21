@@ -24,6 +24,12 @@ def get_application_code(
     apk_name: str,
     method_signature: MethodSignature,
 ) -> str:
+    """Get the application code for a given method signature.
+
+    Raises:
+        NoMethodFoundCodeError: No method found in the file.
+        MultipleMethodsCodeError: Multiple methods found in the file.
+    """
     logger.debug(f"Getting application code for {method_signature}")
     application_code_path = Config.APPLICATION_CODE_PATH(apk_name)
     return _get_method_code_in_file(
