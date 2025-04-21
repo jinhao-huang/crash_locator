@@ -19,16 +19,38 @@ logger = logging.getLogger(__name__)
 client = OpenAI(base_url=Config.OPENAI_BASE_URL, api_key=Config.OPENAI_API_KEY)
 
 
+def _purge_conversation(conversation: list[ChatCompletionMessageParam]):
+    """
+    Purge the reasoning content from the conversation
+    """
+    messages = conversation.copy()
+    for message in messages:
+        for key in list(message.keys()):
+            if key not in ["content", "role"]:
+                del message[key]
+    return messages
+
+
 def _query_llm(messages: list[ChatCompletionMessageParam]):
     conversation = messages.copy()
     logger.debug("Preparing to query LLM")
     response = client.chat.completions.create(
-        model=Config.OPENAI_MODEL, messages=conversation, timeout=240
+        model=Config.OPENAI_MODEL,
+        messages=_purge_conversation(conversation),
+        timeout=240,
     )
     logger.debug("LLM query completed")
+    choice = response.choices[0]
+    message = choice.message
+    reasoning_content = None
+    if "reasoning_content" in message.model_extra:
+        reasoning_content = message.model_extra["reasoning_content"]
+        logger.debug(f"Reasoning content: {reasoning_content}")
     conversation.append(
         ChatCompletionAssistantMessageParam(
-            content=response.choices[0].message.content, role="assistant"
+            content=choice.message.content,
+            role="assistant",
+            reasoning_content=reasoning_content,
         )
     )
 
@@ -63,7 +85,11 @@ def _save_conversation(conversation: list[ChatCompletionMessageParam], dir: Path
     with open(dir / "conversation.md", "w") as f:
         for message in conversation:
             f.write(f"## {message['role']}\n")
-            f.write(f"```text\n{message['content']}\n```\n")
+            f.write("Content:\n")
+            f.write(f"````text\n{message['content']}\n````\n")
+            if "reasoning_content" in message:
+                f.write("Reasoning_content:\n")
+                f.write(f"````text\n{message['reasoning_content']}\n````\n")
 
 
 def _save_remaining_candidates(candidates: list[Candidate], dir: Path):
@@ -95,6 +121,7 @@ def query_filter_candidate(report_info: ReportInfo) -> list[Candidate]:
                 role="user",
             )
         )
+        # TODO: only add the necessary candidate to the context
         messages = _query_llm_with_retry(
             messages,
             3,
