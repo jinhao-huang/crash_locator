@@ -5,8 +5,9 @@ from crash_locator.my_types import (
     ReportInfo,
     RunStatistic,
     Candidate,
-    FinishedReportInfo,
+    ProcessedReportInfo,
     SkippedReportInfo,
+    FinishedReport,
 )
 from crash_locator.utils.llm import query_filter_candidate
 from tqdm import tqdm
@@ -26,32 +27,26 @@ def _is_buggy_method_filtered(
     return True
 
 
-def _statistic(
-    report_info: ReportInfo,
-    remaining_candidates: list[Candidate],
-    statistic: RunStatistic,
-):
-    statistic.processed_reports += 1
-    statistic.processed_candidates += len(report_info.candidates)
-    statistic.filtered_candidates += len(report_info.candidates) - len(
-        remaining_candidates
-    )
-    statistic.retained_candidates += len(remaining_candidates)
-    if _is_buggy_method_filtered(report_info, remaining_candidates):
-        statistic.filtered_buggy_method += 1
-
-    statistic.finished_reports[report_info.apk_name] = FinishedReportInfo(
-        total_candidates_count=len(report_info.candidates),
-        remaining_candidates_count=len(remaining_candidates),
-        is_buggy_method_filtered=_is_buggy_method_filtered(
-            report_info, remaining_candidates
-        ),
-    )
-
-
 def _save_statistic(statistic: RunStatistic):
     with open(Config.RESULT_STATISTIC_PATH, "w") as f:
         f.write(statistic.model_dump_json(indent=4))
+
+
+def _add_statistic(
+    statistic: RunStatistic,
+    report_name: str,
+    finished_report_info: FinishedReport,
+):
+    if isinstance(finished_report_info, ProcessedReportInfo):
+        statistic.processed_reports += 1
+        statistic.processed_candidates += finished_report_info.total_candidates_count
+        statistic.filtered_candidates += finished_report_info.filtered_candidates_count
+        statistic.retained_candidates += finished_report_info.retained_candidates_count
+        statistic.finished_reports_detail[report_name] = finished_report_info
+    elif isinstance(finished_report_info, SkippedReportInfo):
+        statistic.skipped_reports += 1
+
+    _save_statistic(statistic)
 
 
 def _get_statistic() -> RunStatistic:
@@ -105,13 +100,11 @@ def run():
 
     with logging_redirect_tqdm():
         for pre_check_report_dir in tqdm(list(work_list), desc="Processing reports"):
-            _save_statistic(statistic)
-
             logger.info(f"Processing report {pre_check_report_dir.name}")
             logger.debug(f"Report path: {pre_check_report_dir}")
 
             report_name = pre_check_report_dir.name
-            if report_name in statistic.finished_reports:
+            if report_name in statistic.finished_reports_detail:
                 logger.info(f"Report {report_name} already processed, skip it")
                 continue
 
@@ -121,12 +114,22 @@ def run():
 
             if len(report_info.candidates) == 1:
                 logger.info(f"Report {report_name} has only one candidate, skip it")
-                statistic.finished_reports[report_name] = SkippedReportInfo()
+                _add_statistic(statistic, report_name, SkippedReportInfo())
                 continue
 
             _copy_report(report_name)
 
-            remaining_candidates = query_filter_candidate(report_info)
-            _statistic(report_info, remaining_candidates, statistic)
+            retained_candidates = query_filter_candidate(report_info)
+            _add_statistic(
+                statistic,
+                report_name,
+                ProcessedReportInfo(
+                    total_candidates_count=len(report_info.candidates),
+                    retained_candidates_count=len(retained_candidates),
+                    is_buggy_method_filtered=_is_buggy_method_filtered(
+                        report_info, retained_candidates
+                    ),
+                ),
+            )
 
     logger.info(f"Statistic: {statistic}")

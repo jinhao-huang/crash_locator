@@ -100,11 +100,11 @@ def _save_conversation(conversation: list[ChatCompletionMessageParam], dir: Path
                 f.write(f"````text\n{message['reasoning_content']}\n````\n")
 
 
-def _save_remaining_candidates(candidates: list[Candidate], dir: Path):
-    logger.info(f"Saving remaining candidates to {dir}")
+def _save_retained_candidates(candidates: list[Candidate], dir: Path):
+    logger.info(f"Saving retained candidates to {dir}")
 
     dir.mkdir(parents=True, exist_ok=True)
-    with open(dir / "remaining_candidates.json", "w") as f:
+    with open(dir / "retained_candidates.json", "w") as f:
         json.dump(
             [candidate.model_dump() for candidate in candidates],
             f,
@@ -123,7 +123,7 @@ def query_filter_candidate(report_info: ReportInfo) -> list[Candidate]:
         ),
     ]
 
-    remaining_candidates = []
+    retained_candidates = []
     for index, candidate in enumerate(report_info.sorted_candidates):
         logger.info(
             f"Filtering candidate {index + 1} / {len(report_info.sorted_candidates)}"
@@ -143,14 +143,14 @@ def query_filter_candidate(report_info: ReportInfo) -> list[Candidate]:
             lambda x: ("Yes" in x and "No" not in x) or ("No" in x and "Yes" not in x),
         )
         if "Yes" in messages[-1]["content"]:
-            remaining_candidates.append(candidate)
+            retained_candidates.append(candidate)
 
     _save_conversation(messages, Config.RESULT_REPORT_FILTER_DIR(report_info.apk_name))
-    _save_remaining_candidates(
-        remaining_candidates,
+    _save_retained_candidates(
+        retained_candidates,
         Config.RESULT_REPORT_FILTER_DIR(report_info.apk_name),
     )
     logger.info(
-        f"Candidate filtering completed, before: {len(report_info.candidates)}, after: {len(remaining_candidates)}"
+        f"Candidate filtering completed, before: {len(report_info.candidates)}, after: {len(retained_candidates)}"
     )
-    return remaining_candidates
+    return retained_candidates

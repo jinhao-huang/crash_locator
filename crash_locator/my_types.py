@@ -24,22 +24,25 @@ class ReportStatus(StrEnum):
     TEMPORARY_SKIPPED = "temporary_skipped"
 
 
-class FinishedReportInfo(BaseModel):
+class ProcessedReportInfo(BaseModel):
     report_status: Literal[ReportStatus.FINISHED] = ReportStatus.FINISHED
     total_candidates_count: int
-    remaining_candidates_count: int
+    retained_candidates_count: int
     is_buggy_method_filtered: bool
+
+    @property
+    def filtered_candidates_count(self) -> int:
+        return self.total_candidates_count - self.retained_candidates_count
 
 
 class SkippedReportInfo(BaseModel):
     report_status: Literal[ReportStatus.SKIPPED] = ReportStatus.SKIPPED
 
 
-class TemporarySkippedReportInfo(BaseModel):
-    report_status: Literal[ReportStatus.TEMPORARY_SKIPPED] = (
-        ReportStatus.TEMPORARY_SKIPPED
-    )
-    reason: str
+FinishedReport = Annotated[
+    ProcessedReportInfo | SkippedReportInfo,
+    Field(discriminator="report_status"),
+]
 
 
 class RunStatistic(BaseModel):
@@ -53,16 +56,11 @@ class RunStatistic(BaseModel):
     retained_candidates: int = 0
     # Count of buggy methods that have been filtered
     filtered_buggy_method: int = 0
-    # Count of methods that have been filtered
-    filtered_method_count: int = 0
 
-    finished_reports: dict[
-        str,
-        Annotated[
-            FinishedReportInfo | SkippedReportInfo | TemporarySkippedReportInfo,
-            Field(discriminator="report_status"),
-        ],
-    ] = Field(
+    # Count of skipped reports
+    skipped_reports: int = 0
+
+    finished_reports_detail: dict[str, FinishedReport] = Field(
         default_factory=dict,
     )
 
