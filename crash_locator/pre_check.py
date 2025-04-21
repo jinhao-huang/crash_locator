@@ -266,28 +266,9 @@ def candidate_into_reason(
 
 
 def post_check_statistic(report: ReportInfo, statistic: PreCheckStatistic):
-    exist_buggy_method = False
-    for candidate in report.candidates:
-        if candidate.signature == report.buggy_method:
-            exist_buggy_method = True
-            break
-    if exist_buggy_method:
-        statistic.exist_buggy_methods += 1
-    else:
-        statistic.no_buggy_methods += 1
-
-    try:
-        for candidate in report.candidates:
-            get_application_code(report.apk_name, candidate.signature)
-            candidate.reasons.reason_explanation()
-        if len(report.candidates) not in statistic.candidates_nums_distribution:
-            statistic.candidates_nums_distribution[len(report.candidates)] = 0
-        statistic.candidates_nums_distribution[len(report.candidates)] += 1
-        statistic.candidates_nums_valid += 1
-    except MethodCodeException as e:
-        logger.error(f"Candidate {candidate.signature} code not found")
-        logger.error(e)
-        statistic.candidates_nums_invalid += 1
+    if len(report.candidates) not in statistic.candidates_nums_distribution:
+        statistic.candidates_nums_distribution[len(report.candidates)] = 0
+    statistic.candidates_nums_distribution[len(report.candidates)] += 1
 
 
 def _check_exception_info_exist(report: dict) -> None:
@@ -312,7 +293,7 @@ def _check_candidate_code_exist(report: ReportInfo) -> None:
         try:
             get_application_code(report.apk_name, candidate.signature)
         except MethodCodeException:
-            raise CandidateCodeNotFoundException(candidate.signature)
+            raise CandidateCodeNotFoundException(str(candidate.signature))
 
 
 def pre_check(pre_check_reports_dir: Path) -> ReportInfo:
@@ -426,9 +407,11 @@ if __name__ == "__main__":
                 logger.error(f"Crash report {report_name} pre-check failed: {e}")
                 statistic.invalid_reports += 1
                 shutil.rmtree(pre_check_report_dir)
-                if e.__class__.__name__ not in statistic.invalid_report_exception:
-                    statistic.invalid_report_exception[e.__class__.__name__] = 0
-                statistic.invalid_report_exception[e.__class__.__name__] += 1
+                exception_name = e.__class__.__name__
+                if exception_name not in statistic.invalid_report_exceptions:
+                    statistic.invalid_report_exceptions[exception_name] = 0
+                statistic.invalid_report_exceptions[exception_name] += 1
+                statistic.invalid_reports_detail[report_name] = str(e)
                 continue
             except Exception as e:
                 logger.exception(e)

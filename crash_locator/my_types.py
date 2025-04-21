@@ -13,12 +13,9 @@ class PreCheckStatistic(BaseModel):
     total_reports: int = 0
     valid_reports: int = 0
     invalid_reports: int = 0
-    invalid_report_exception: dict[str, int] = Field(default_factory=dict)
-    exist_buggy_methods: int = 0
-    no_buggy_methods: int = 0
+    invalid_report_exceptions: dict[str, int] = Field(default_factory=dict)
+    invalid_reports_detail: dict[str, str] = Field(default_factory=dict)
     candidates_nums_distribution: dict[int, int] = Field(default_factory=dict)
-    candidates_nums_valid: int = 0
-    candidates_nums_invalid: int = 0
 
 
 class ReportStatus(StrEnum):
