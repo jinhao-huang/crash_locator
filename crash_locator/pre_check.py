@@ -17,6 +17,8 @@ from crash_locator.exceptions import (
     PreCheckException,
     InvalidFrameworkStackException,
     MethodCodeException,
+    NoBuggyMethodCandidatesException,
+    CandidateCodeNotFoundException,
 )
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
@@ -148,7 +150,7 @@ def find_terminal_api(candidates: list[dict]) -> str | None:
     return None
 
 
-def get_framework_stack(
+def _get_and_check_framework_stack(
     stack_trace: list[str], stack_trace_short_api: list[str]
 ) -> tuple[list[str], list[str]]:
     framework_trace = []
@@ -173,7 +175,7 @@ def get_framework_stack(
 
     if len(framework_trace) == 0 or divider_index is None:
         raise InvalidFrameworkStackException(
-            f"Invalid framework stack trace: {stack_trace}"
+            "Cannot find the divider index of the framework stack trace"
         )
 
     return framework_trace, framework_short_trace
@@ -288,13 +290,37 @@ def post_check_statistic(report: ReportInfo, statistic: PreCheckStatistic):
         statistic.candidates_nums_invalid += 1
 
 
+def _check_exception_info_exist(report: dict) -> None:
+    if "Fault Localization by CrashTracker" not in report:
+        raise EmptyExceptionInfoException()
+    if "Exception Info" not in report["Fault Localization by CrashTracker"]:
+        raise EmptyExceptionInfoException()
+    if len(report["Fault Localization by CrashTracker"]["Exception Info"]) == 0:
+        raise EmptyExceptionInfoException()
+
+
+def _check_buggy_method_candidates_exist(report: ReportInfo) -> None:
+    buggy_method = report.buggy_method
+    for candidate in report.candidates:
+        if candidate.signature == buggy_method:
+            return
+    raise NoBuggyMethodCandidatesException()
+
+
+def _check_candidate_code_exist(report: ReportInfo) -> None:
+    for candidate in report.candidates:
+        try:
+            get_application_code(report.apk_name, candidate.signature)
+        except MethodCodeException:
+            raise CandidateCodeNotFoundException(candidate.signature)
+
+
 def pre_check(pre_check_reports_dir: Path) -> ReportInfo:
     report_name = pre_check_reports_dir.name
     crash_report_path = pre_check_reports_dir / f"{report_name}.json"
     report = json.load(open(crash_report_path, "r"))
 
-    if len(report["Fault Localization by CrashTracker"]["Exception Info"]) == 0:
-        raise EmptyExceptionInfoException(f"Empty exception info for {report_name}")
+    _check_exception_info_exist(report)
     report_completion(report)
 
     stack_trace = [
@@ -302,7 +328,7 @@ def pre_check(pre_check_reports_dir: Path) -> ReportInfo:
         for method in report["Crash Info in Dataset"]["stack trace signature"]
     ]
     stack_trace_short_api = report["Crash Info in Dataset"]["stack trace"]
-    framework_trace, framework_short_trace = get_framework_stack(
+    framework_trace, framework_short_trace = _get_and_check_framework_stack(
         stack_trace, stack_trace_short_api
     )
     framework_entry_api = framework_trace[-1]
@@ -355,6 +381,9 @@ def pre_check(pre_check_reports_dir: Path) -> ReportInfo:
         ),
     )
 
+    _check_buggy_method_candidates_exist(report_info)
+    _check_candidate_code_exist(report_info)
+
     output_file_path = pre_check_reports_dir / Config.PRE_CHECK_REPORT_INFO_NAME
     with open(output_file_path, "w") as json_file:
         json_file.write(report_info.model_dump_json(indent=4))
@@ -375,29 +404,28 @@ if __name__ == "__main__":
 
     with logging_redirect_tqdm():
         for crash_report_dir in tqdm(list(work_list)):
-            statistic.total_reports += 1
             report_name = crash_report_dir.name
             crash_report_path = crash_report_dir / f"{report_name}.json"
             if not crash_report_path.exists():
-                logger.error(f"Crash report {report_name} not found")
-                statistic.invalid_reports += 1
+                logger.error(f"The directory {crash_report_dir} is not a crash report")
                 continue
 
+            statistic.total_reports += 1
             logger.info(f"Pre-checking report {report_name}")
             logger.debug(f"Crash report directory: {crash_report_dir}")
             logger.debug(f"Crash report path: {crash_report_path}")
-            pre_check_report_path = pre_check_reports_dir / report_name
-            pre_check_report_path.mkdir(parents=True, exist_ok=True)
-            shutil.copy(crash_report_path, pre_check_report_path)
+            pre_check_report_dir = pre_check_reports_dir / report_name
+            pre_check_report_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy(crash_report_path, pre_check_report_dir)
 
             try:
-                report_info = pre_check(pre_check_report_path)
+                report_info = pre_check(pre_check_report_dir)
                 post_check_statistic(report_info, statistic)
 
             except PreCheckException as e:
                 logger.error(f"Crash report {report_name} pre-check failed: {e}")
                 statistic.invalid_reports += 1
-                shutil.rmtree(pre_check_report_path)
+                shutil.rmtree(pre_check_report_dir)
                 if e.__class__.__name__ not in statistic.invalid_report_exception:
                     statistic.invalid_report_exception[e.__class__.__name__] = 0
                 statistic.invalid_report_exception[e.__class__.__name__] += 1

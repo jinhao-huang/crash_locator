@@ -22,6 +22,18 @@ class InvalidFrameworkStackException(PreCheckException):
         super().__init__(self.message)
 
 
+class NoBuggyMethodCandidatesException(PreCheckException):
+    def __init__(self, message="No buggy method candidates in the report"):
+        self.message = message
+        super().__init__(self.message)
+
+
+class CandidateCodeNotFoundException(PreCheckException):
+    def __init__(self, candidate_name: str):
+        self.message = f"Candidate code not found for {candidate_name}"
+        super().__init__(self.message)
+
+
 class MethodCodeException(Exception):
     def __init__(self, message="Method code cannot be retrieved"):
         self.message = message
