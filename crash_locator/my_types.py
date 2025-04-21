@@ -43,20 +43,16 @@ class TemporarySkippedReportInfo(BaseModel):
 
 
 class RunStatistic(BaseModel):
-    total_methods: int = 0
-    valid_methods: int = 0
-    invalid_methods: int = 0
-    total_reports: int = 0
-    valid_reports: int = 0
-    invalid_reports: int = 0
-    valid_reports_methods: int = 0
-    dollar_sign_invalid_methods: int = 0
-    empty_signature_methods: int = 0
-
     # Processed reports after filtering
     processed_reports: int = 0
+    # Count of candidates of processed reports before filtering
+    processed_candidates: int = 0
+    # Count of candidates that have been filtered
+    filtered_candidates: int = 0
+    # Count of retained candidates
+    retained_candidates: int = 0
     # Count of buggy methods that have been filtered
-    filtered_buggy_method_count: int = 0
+    filtered_buggy_method: int = 0
     # Count of methods that have been filtered
     filtered_method_count: int = 0
 

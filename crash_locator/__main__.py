@@ -1,3 +1,4 @@
+import shutil
 from crash_locator.config import Config, setup_logging
 from crash_locator.utils.java_parser import get_application_code
 from crash_locator.my_types import (
@@ -8,7 +9,6 @@ from crash_locator.my_types import (
     SkippedReportInfo,
     TemporarySkippedReportInfo,
 )
-from crash_locator.exceptions import MethodCodeException
 from crash_locator.utils.llm import query_filter_candidate
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
@@ -34,8 +34,8 @@ def _is_buggy_method_filtered(
 ) -> bool:
     for candidate in remaining_candidates:
         if candidate.signature == report_info.buggy_method:
-            return True
-    return False
+            return False
+    return True
 
 
 def filter_statistic(
@@ -44,10 +44,13 @@ def filter_statistic(
     statistic: RunStatistic,
 ):
     statistic.processed_reports += 1
-    filtered_methods_nums = len(report_info.candidates) - len(remaining_candidates)
-    statistic.filtered_method_count += filtered_methods_nums
+    statistic.processed_candidates += len(report_info.candidates)
+    statistic.filtered_candidates += len(report_info.candidates) - len(
+        remaining_candidates
+    )
+    statistic.retained_candidates += len(remaining_candidates)
     if _is_buggy_method_filtered(report_info, remaining_candidates):
-        statistic.filtered_buggy_method_count += 1
+        statistic.filtered_buggy_method += 1
 
 
 def save_statistic(statistic: RunStatistic):
@@ -82,56 +85,25 @@ if __name__ == "__main__":
                 continue
 
             report_path = pre_check_report_dir / Config.PRE_CHECK_REPORT_INFO_NAME
-            if not report_path.exists():
-                logger.error(f"Crash report {report_name} not found")
-                statistic.invalid_reports += 1
-                continue
-            else:
-                with open(report_path, "r") as f:
-                    report_info = ReportInfo(**json.load(f))
+            with open(report_path, "r") as f:
+                report_info = ReportInfo(**json.load(f))
 
             if len(report_info.candidates) == 1:
                 statistic.finished_reports[report_name] = SkippedReportInfo()
                 continue
-            elif len(report_info.candidates) <= 3:
-                statistic.finished_reports[report_name] = TemporarySkippedReportInfo(
-                    reason=f"Only {len(report_info.candidates)} candidates"
-                )
-                continue
 
-            invalid_report_flag = False
-            for candidate in report_info.candidates:
-                candidate_signature = candidate.signature
-                logger.info(f"Processing candidate {candidate_signature}")
-                try:
-                    remaining_candidates = llm_filter(report_info)
-                    filter_statistic(report_info, remaining_candidates, statistic)
-                    statistic.finished_reports[report_name] = FinishedReportInfo(
-                        total_candidates_count=len(report_info.candidates),
-                        remaining_candidates_count=len(remaining_candidates),
-                        is_buggy_method_filtered=_is_buggy_method_filtered(
-                            report_info, remaining_candidates
-                        ),
-                    )
-                except MethodCodeException as e:
-                    logger.error(
-                        f"Candidate `{candidate_signature}` processing failed: {e}"
-                    )
-                    statistic.invalid_methods += 1
-                    invalid_report_flag = True
-                    if "$" in candidate_signature:
-                        statistic.dollar_sign_invalid_methods += 1
-                    continue
-
-                statistic.valid_methods += 1
-
-            if invalid_report_flag:
-                statistic.invalid_reports += 1
-                logger.error(
-                    f"Invalid report {report_name}\nfile: {pre_check_report_dir}\napplication code dir: {Config.APPLICATION_CODE_PATH(report_info.apk_name)}"
-                )
-            else:
-                statistic.valid_reports += 1
-                statistic.valid_reports_methods += len(report_info.candidates)
+            shutil.copytree(
+                pre_check_report_dir,
+                Config.RESULT_REPORT_DIR(report_name),
+            )
+            remaining_candidates = llm_filter(report_info)
+            filter_statistic(report_info, remaining_candidates, statistic)
+            statistic.finished_reports[report_name] = FinishedReportInfo(
+                total_candidates_count=len(report_info.candidates),
+                remaining_candidates_count=len(remaining_candidates),
+                is_buggy_method_filtered=_is_buggy_method_filtered(
+                    report_info, remaining_candidates
+                ),
+            )
 
     logger.info(f"Statistic: {statistic}")
