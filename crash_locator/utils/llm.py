@@ -1,5 +1,5 @@
 from openai import OpenAI
-from crash_locator.config import Config
+from crash_locator.config import Config, get_thread_logger
 from crash_locator.my_types import ReportInfo, Candidate
 from crash_locator.prompt import Prompt
 from crash_locator.exceptions import UnExpectedResponseException
@@ -33,9 +33,10 @@ def _purge_conversation(conversation: list[ChatCompletionMessageParam]):
 
 
 def _query_llm(messages: list[ChatCompletionMessageParam]):
+    thread_logger = get_thread_logger()
     conversation = _purge_conversation(messages)
-    logger.info("Preparing to query LLM")
-    logger.debug(f"Messages: {conversation}")
+    thread_logger.info("Preparing to query LLM")
+    thread_logger.debug(f"Messages: {conversation}")
 
     response = client.chat.completions.create(
         model=Config.OPENAI_MODEL,
@@ -43,15 +44,15 @@ def _query_llm(messages: list[ChatCompletionMessageParam]):
         timeout=240,
     )
 
-    logger.info("LLM query completed")
-    logger.debug(f"Response: {response}")
+    thread_logger.info("LLM query completed")
+    thread_logger.debug(f"Response: {response}")
 
     choice = response.choices[0]
     message = choice.message
     reasoning_content = None
     if "reasoning_content" in message.model_extra:
         reasoning_content = message.model_extra["reasoning_content"]
-        logger.debug(f"Reasoning content: {reasoning_content}")
+        thread_logger.debug(f"Reasoning content: {reasoning_content}")
     conversation.append(
         ChatCompletionAssistantMessageParam(
             content=choice.message.content,
@@ -68,25 +69,27 @@ def _query_llm_with_retry(
     retry_times: int,
     validate_func: Callable[[str], bool],
 ):
-    logger.info(f"Query LLM with retry {retry_times} times")
+    thread_logger = get_thread_logger()
+    thread_logger.info(f"Query LLM with retry {retry_times} times")
 
     for times in range(retry_times):
-        logger.info(f"Retry {times + 1} / {retry_times}")
+        thread_logger.info(f"Retry {times + 1} / {retry_times}")
         conversation = _query_llm(messages)
         content = conversation[-1]["content"]
 
         if validate_func(content):
-            logger.info("Get valid response from LLM")
+            thread_logger.info("Get valid response from LLM")
             return conversation
 
-        logger.error("Get unexpected response from LLM")
+        thread_logger.error("Get unexpected response from LLM")
 
     raise UnExpectedResponseException("Invalid response from LLM")
 
 
 def _save_conversation(conversation: list[ChatCompletionMessageParam], dir: Path):
+    thread_logger = get_thread_logger()
     dir.mkdir(parents=True, exist_ok=True)
-    logger.info(f"Saving conversation to {dir}")
+    thread_logger.info(f"Saving conversation to {dir}")
 
     with open(dir / "conversation.json", "w") as f:
         json.dump(conversation, f)
@@ -101,7 +104,8 @@ def _save_conversation(conversation: list[ChatCompletionMessageParam], dir: Path
 
 
 def _save_retained_candidates(candidates: list[Candidate], dir: Path):
-    logger.info(f"Saving retained candidates to {dir}")
+    thread_logger = get_thread_logger()
+    thread_logger.info(f"Saving retained candidates to {dir}")
 
     dir.mkdir(parents=True, exist_ok=True)
     with open(dir / "retained_candidates.json", "w") as f:
@@ -113,6 +117,9 @@ def _save_retained_candidates(candidates: list[Candidate], dir: Path):
 
 
 def query_filter_candidate(report_info: ReportInfo) -> list[Candidate]:
+    thread_logger = get_thread_logger()
+    thread_logger.info(f"Starting candidate filtering for {report_info.apk_name}")
+
     messages = [
         ChatCompletionSystemMessageParam(
             content=Prompt.FILTER_CANDIDATE_SYSTEM, role="system"
@@ -125,10 +132,10 @@ def query_filter_candidate(report_info: ReportInfo) -> list[Candidate]:
 
     retained_candidates = []
     for index, candidate in enumerate(report_info.sorted_candidates):
-        logger.info(
+        thread_logger.info(
             f"Filtering candidate {index + 1} / {len(report_info.sorted_candidates)}"
         )
-        logger.info(f"Candidate: {candidate.name}")
+        thread_logger.info(f"Candidate: {candidate.name}")
 
         messages.append(
             ChatCompletionUserMessageParam(
@@ -150,7 +157,7 @@ def query_filter_candidate(report_info: ReportInfo) -> list[Candidate]:
         retained_candidates,
         Config.RESULT_REPORT_FILTER_DIR(report_info.apk_name),
     )
-    logger.info(
+    thread_logger.info(
         f"Candidate filtering completed, before: {len(report_info.candidates)}, after: {len(retained_candidates)}"
     )
     return retained_candidates

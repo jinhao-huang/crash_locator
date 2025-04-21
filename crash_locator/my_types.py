@@ -21,7 +21,7 @@ class PreCheckStatistic(BaseModel):
 class ReportStatus(StrEnum):
     FINISHED = "finished"
     SKIPPED = "skipped"
-    TEMPORARY_SKIPPED = "temporary_skipped"
+    FAILED = "failed"
 
 
 class ProcessedReportInfo(BaseModel):
@@ -39,8 +39,14 @@ class SkippedReportInfo(BaseModel):
     report_status: Literal[ReportStatus.SKIPPED] = ReportStatus.SKIPPED
 
 
+class FailedReportInfo(BaseModel):
+    report_status: Literal[ReportStatus.FAILED] = ReportStatus.FAILED
+    exception_type: str
+    error_message: str
+
+
 FinishedReport = Annotated[
-    ProcessedReportInfo | SkippedReportInfo,
+    ProcessedReportInfo | SkippedReportInfo | FailedReportInfo,
     Field(discriminator="report_status"),
 ]
 
@@ -59,6 +65,9 @@ class RunStatistic(BaseModel):
 
     # Count of skipped reports
     skipped_reports: int = 0
+
+    # Count of failed reports
+    failed_reports: int = 0
 
     finished_reports_detail: dict[str, FinishedReport] = Field(
         default_factory=dict,

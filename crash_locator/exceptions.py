@@ -86,3 +86,9 @@ class UnExpectedResponseException(LLMException):
     def __init__(self, message="Unexpected response from LLM"):
         self.message = message
         super().__init__(self.message)
+
+
+class LoggerNotFoundException(Exception):
+    def __init__(self, message="Logger not found"):
+        self.message = message
+        super().__init__(self.message)

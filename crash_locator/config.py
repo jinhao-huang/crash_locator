@@ -3,19 +3,25 @@ import os
 from dotenv import load_dotenv
 from datetime import datetime
 import logging.config
+import threading
+from crash_locator.exceptions import LoggerNotFoundException
 
 load_dotenv()
+
+_thread_local = threading.local()
 
 
 class Config:
     ROOT_DIR: Path = Path.cwd()
     DATA_DIR: Path = ROOT_DIR / "Data"
 
+    MAX_WORKERS: int = int(os.environ.get("MAX_WORKERS", "4"))
+
     OPENAI_BASE_URL: str = os.environ.get("OPENAI_BASE_URL")
     OPENAI_API_KEY: str = os.environ.get("OPENAI_API_KEY")
     OPENAI_MODEL: str = os.environ.get("OPENAI_MODEL")
 
-    RESULT_DIR: Path = DATA_DIR / "results" / "20250420"
+    RESULT_DIR: Path = DATA_DIR / "results" / "20250421"
     RESULT_STATISTIC_PATH: Path = RESULT_DIR / "statistic.json"
     RESULT_LOG_FILE_PATH: Path = RESULT_DIR / "app.log"
 
@@ -118,3 +124,21 @@ def setup_logging(log_file_path: Path):
             "disable_existing_loggers": True,
         }
     )
+
+
+def set_thread_logger(logger):
+    global _thread_local
+    setattr(_thread_local, "logger", logger)
+
+
+def get_thread_logger():
+    global _thread_local
+    if hasattr(_thread_local, "logger"):
+        return getattr(_thread_local, "logger")
+    raise LoggerNotFoundException("Logger not found")
+
+
+def clear_thread_logger():
+    global _thread_local
+    if hasattr(_thread_local, "logger"):
+        delattr(_thread_local, "logger")
