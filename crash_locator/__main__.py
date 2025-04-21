@@ -17,7 +17,6 @@ import json
 logger = logging.getLogger(__name__)
 
 
-# Check if the buggy method is filtered
 def _is_buggy_method_filtered(
     report_info: ReportInfo, remaining_candidates: list[Candidate]
 ) -> bool:

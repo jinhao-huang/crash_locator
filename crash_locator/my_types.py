@@ -214,8 +214,6 @@ class KeyVarNonTerminalReason(CandidateReason):
 Our static analysis tool detect that the method invoke `{self.terminal_api}` by call chain {self.call_chain_to_terminal}.
 
 `{self.terminal_api}` method pass buggy parameter to `{self.framework_entry_api}`
-
-The buggy parameter meet the crash constraint which was described in `Constraint` part
 """
 
 
