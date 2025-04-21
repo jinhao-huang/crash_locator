@@ -13,6 +13,7 @@ import logging
 from typing import Callable
 import json
 from pathlib import Path
+from copy import deepcopy
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ def _purge_conversation(conversation: list[ChatCompletionMessageParam]):
     """
     Purge the reasoning content from the conversation
     """
-    messages = conversation.copy()
+    messages = deepcopy(conversation)
     for message in messages:
         for key in list(message.keys()):
             if key not in ["content", "role"]:
@@ -32,14 +33,19 @@ def _purge_conversation(conversation: list[ChatCompletionMessageParam]):
 
 
 def _query_llm(messages: list[ChatCompletionMessageParam]):
-    conversation = messages.copy()
-    logger.debug("Preparing to query LLM")
+    conversation = _purge_conversation(messages)
+    logger.info("Preparing to query LLM")
+    logger.debug(f"Messages: {conversation}")
+
     response = client.chat.completions.create(
         model=Config.OPENAI_MODEL,
-        messages=_purge_conversation(conversation),
+        messages=conversation,
         timeout=240,
     )
-    logger.debug("LLM query completed")
+
+    logger.info("LLM query completed")
+    logger.debug(f"Response: {response}")
+
     choice = response.choices[0]
     message = choice.message
     reasoning_content = None
@@ -62,24 +68,26 @@ def _query_llm_with_retry(
     retry_times: int,
     validate_func: Callable[[str], bool],
 ):
+    logger.info(f"Query LLM with retry {retry_times} times")
+
     for times in range(retry_times):
+        logger.info(f"Retry {times + 1} / {retry_times}")
         conversation = _query_llm(messages)
         content = conversation[-1]["content"]
+
         if validate_func(content):
-            logger.info(
-                f"Get valid response from LLM, retry {times + 1} / {retry_times}"
-            )
-            logger.debug(f"Response: {content}")
+            logger.info("Get valid response from LLM")
             return conversation
-        logger.error(
-            f"Get unexpected response from LLM, retry {times + 1} / {retry_times}"
-        )
-        logger.debug(f"Response: {content}")
+
+        logger.error("Get unexpected response from LLM")
+
     raise UnExpectedResponseException("Invalid response from LLM")
 
 
 def _save_conversation(conversation: list[ChatCompletionMessageParam], dir: Path):
     dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Saving conversation to {dir}")
+
     with open(dir / "conversation.json", "w") as f:
         json.dump(conversation, f)
     with open(dir / "conversation.md", "w") as f:
@@ -93,6 +101,8 @@ def _save_conversation(conversation: list[ChatCompletionMessageParam], dir: Path
 
 
 def _save_remaining_candidates(candidates: list[Candidate], dir: Path):
+    logger.info(f"Saving remaining candidates to {dir}")
+
     dir.mkdir(parents=True, exist_ok=True)
     with open(dir / "remaining_candidates.json", "w") as f:
         json.dump(
@@ -114,7 +124,12 @@ def query_filter_candidate(report_info: ReportInfo) -> list[Candidate]:
     ]
 
     remaining_candidates = []
-    for candidate in report_info.sorted_candidates:
+    for index, candidate in enumerate(report_info.sorted_candidates):
+        logger.info(
+            f"Filtering candidate {index + 1} / {len(report_info.sorted_candidates)}"
+        )
+        logger.info(f"Candidate: {candidate.name}")
+
         messages.append(
             ChatCompletionUserMessageParam(
                 content=Prompt.FILTER_CANDIDATE_METHOD(report_info, candidate),

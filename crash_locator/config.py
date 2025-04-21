@@ -79,9 +79,9 @@ def setup_logging(log_file_path: Path):
                     # class is always "logging.Formatter"
                     "class": "logging.Formatter",
                     # Optional: logging output format
-                    "format": "[%(asctime)s][%(filename)s][%(levelname)s] %(message)s",
+                    "format": "[%(asctime)s] [%(filename)s] [%(levelname)s] %(message)s",
                     # Optional: asctime format
-                    "datefmt": "%y-%m-%d %H:%M:%S",
+                    "datefmt": "%Y-%m-%d %H:%M:%S",
                 }
             },
             # Handlers use the formatter names declared above
@@ -106,8 +106,15 @@ def setup_logging(log_file_path: Path):
                     "encoding": "utf-8",
                 },
             },
+            "loggers": {
+                "crash_locator": {
+                    "handlers": ["console", "file"],
+                    "level": "DEBUG",
+                    "propagate": False,
+                },
+            },
             # Just a standalone kwarg for the root logger
             "root": {"level": "DEBUG", "handlers": ["console", "file"]},
-            "disable_existing_loggers": False,
+            "disable_existing_loggers": True,
         }
     )
