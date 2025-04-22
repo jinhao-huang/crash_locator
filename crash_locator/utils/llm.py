@@ -1,14 +1,16 @@
 from openai import OpenAI
 from crash_locator.config import Config, get_thread_logger
-from crash_locator.my_types import ReportInfo, Candidate
+from crash_locator.my_types import ReportInfo, Candidate, RunStatistic
 from crash_locator.prompt import Prompt
 from crash_locator.exceptions import UnExpectedResponseException
+from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 from openai.types.chat.chat_completion_message_param import (
     ChatCompletionMessageParam,
     ChatCompletionSystemMessageParam,
     ChatCompletionUserMessageParam,
     ChatCompletionAssistantMessageParam,
 )
+from crash_locator.config import run_statistic
 import logging
 from typing import Callable
 import json
@@ -42,22 +44,42 @@ def _query_llm(messages: list[ChatCompletionMessageParam]):
         model=Config.OPENAI_MODEL,
         messages=conversation,
         timeout=240,
+        stream=True,
     )
 
-    thread_logger.info("LLM query completed")
-    thread_logger.debug(f"Response: {response}")
+    collected_chunks: list[ChatCompletionChunk] = []
+    collected_content: list[str | None] = []
+    collected_reasoning_content: list[str | None] = []
 
-    choice = response.choices[0]
-    message = choice.message
-    reasoning_content = None
-    if "reasoning_content" in message.model_extra:
-        reasoning_content = message.model_extra["reasoning_content"]
-        thread_logger.debug(f"Reasoning content: {reasoning_content}")
+    for chunk in response:
+        thread_logger.debug(f"Received chunk: {chunk}")
+        collected_chunks.append(chunk)
+
+        delta = chunk.choices[0].delta
+        collected_content.append(delta.content)
+        if "reasoning_content" in delta.model_extra:
+            collected_reasoning_content.append(delta.model_extra["reasoning_content"])
+
+    full_content = "".join([m for m in collected_content if m is not None])
+    full_reasoning_content = "".join(
+        [m for m in collected_reasoning_content if m is not None]
+    )
+    last_chunk = collected_chunks[-1]
+    token_usage = RunStatistic.TokenUsage(
+        input_tokens=last_chunk.usage.prompt_tokens,
+        output_tokens=last_chunk.usage.completion_tokens,
+    )
+    run_statistic.add_token_usage(token_usage)
+    thread_logger.info("LLM query completed")
+    thread_logger.debug(f"Full content: {full_content}")
+    thread_logger.debug(f"Full reasoning content: {full_reasoning_content}")
+    thread_logger.debug(f"Token usage: {token_usage}")
+
     conversation.append(
         ChatCompletionAssistantMessageParam(
-            content=choice.message.content,
+            content=full_content,
             role="assistant",
-            reasoning_content=reasoning_content,
+            reasoning_content=full_reasoning_content,
         )
     )
 
