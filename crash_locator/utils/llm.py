@@ -2,7 +2,7 @@ from openai import OpenAI
 from crash_locator.config import Config, get_thread_logger
 from crash_locator.my_types import ReportInfo, Candidate, RunStatistic
 from crash_locator.prompt import Prompt
-from crash_locator.exceptions import UnExpectedResponseException
+from crash_locator.exceptions import UnExpectedResponseException, TaskCancelledException
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 from openai.types.chat.chat_completion_message_param import (
     ChatCompletionMessageParam,
@@ -10,7 +10,7 @@ from openai.types.chat.chat_completion_message_param import (
     ChatCompletionUserMessageParam,
     ChatCompletionAssistantMessageParam,
 )
-from crash_locator.config import run_statistic
+from crash_locator.config import run_statistic, exit_flag
 import logging
 from typing import Callable
 import json
@@ -52,6 +52,9 @@ def _query_llm(messages: list[ChatCompletionMessageParam]):
     collected_reasoning_content: list[str | None] = []
 
     for chunk in response:
+        if exit_flag:
+            raise TaskCancelledException("Task cancelled")
+
         thread_logger.debug(f"Received chunk: {chunk}")
         collected_chunks.append(chunk)
 

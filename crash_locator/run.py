@@ -7,6 +7,7 @@ from crash_locator.config import (
     set_thread_logger,
     clear_thread_logger,
     run_statistic,
+    set_exit_flag,
 )
 from crash_locator.my_types import (
     ReportInfo,
@@ -17,12 +18,12 @@ from crash_locator.my_types import (
     FailedReportInfo,
 )
 from crash_locator.utils.llm import query_filter_candidate
+from crash_locator.exceptions import TaskCancelledException
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 import logging
 import json
 import traceback
-from multiprocessing import Process
 
 logger = logging.getLogger()
 
@@ -115,11 +116,14 @@ def _process_report(
         )
         task_logger.info(f"Finished processing report {report_name}")
         return
+    except TaskCancelledException:
+        task_logger.info(f"Task {task_name} cancelled")
+        return
     finally:
         clear_thread_logger()
 
 
-def _tpe_runner():
+def run():
     setup_logging(Config.RESULT_LOG_FILE_PATH)
     logger.info("Start processing reports")
     logger.info(f"Maximum worker threads: {Config.MAX_WORKERS}")
@@ -127,44 +131,39 @@ def _tpe_runner():
     work_list = _get_work_list()
     logger.info(f"Found {len(work_list)} reports to process")
 
-    with logging_redirect_tqdm():
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=Config.MAX_WORKERS
-        ) as executor:
-            future_to_report = {
-                executor.submit(
-                    _process_report, report_dir, run_statistic, report_dir.name
-                ): report_dir.name
-                for report_dir in work_list
-            }
-
-            for future in tqdm(
-                concurrent.futures.as_completed(future_to_report),
-                total=len(future_to_report),
-                desc="Processing reports",
-            ):
-                report_name = future_to_report[future]
-                try:
-                    future.result()
-                except Exception as e:
-                    logger.critical(f"Error processing report: {e}")
-                    logger.critical(f"{traceback.format_exc()}")
-                    run_statistic.add_report(
-                        report_name,
-                        FailedReportInfo(
-                            exception_type=e.__class__.__name__,
-                            error_message=str(e),
-                        ),
-                    )
-
-    logger.info(f"Statistic: {run_statistic}")
-
-
-def run():
     try:
-        process = Process(target=_tpe_runner)
-        process.start()
-        process.join()
+        with logging_redirect_tqdm():
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=Config.MAX_WORKERS
+            ) as executor:
+                future_to_report = {
+                    executor.submit(
+                        _process_report, report_dir, run_statistic, report_dir.name
+                    ): report_dir.name
+                    for report_dir in work_list
+                }
+
+                for future in tqdm(
+                    concurrent.futures.as_completed(future_to_report),
+                    total=len(future_to_report),
+                    desc="Processing reports",
+                ):
+                    report_name = future_to_report[future]
+                    try:
+                        future.result()
+                    except Exception as e:
+                        logger.critical(f"Error processing report: {e}")
+                        logger.critical(f"{traceback.format_exc()}")
+                        run_statistic.add_report(
+                            report_name,
+                            FailedReportInfo(
+                                exception_type=e.__class__.__name__,
+                                error_message=str(e),
+                            ),
+                        )
+
+        logger.info(f"Statistic: {run_statistic}")
     except KeyboardInterrupt:
-        process.terminate()
-        process.join()
+        logger.info("Received KeyboardInterrupt, program will exit")
+        set_exit_flag()
+        executor.shutdown(wait=True, cancel_futures=True)

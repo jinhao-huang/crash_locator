@@ -166,3 +166,10 @@ def init_statistic() -> RunStatistic:
 
 
 run_statistic: RunStatistic = init_statistic()
+
+exit_flag: bool = False
+
+
+def set_exit_flag():
+    global exit_flag
+    exit_flag = True

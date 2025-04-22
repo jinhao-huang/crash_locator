@@ -92,3 +92,9 @@ class LoggerNotFoundException(Exception):
     def __init__(self, message="Logger not found"):
         self.message = message
         super().__init__(self.message)
+
+
+class TaskCancelledException(Exception):
+    def __init__(self, message="Task cancelled"):
+        self.message = message
+        super().__init__(self.message)
