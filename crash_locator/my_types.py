@@ -91,9 +91,17 @@ class RunStatistic(BaseModel):
     )
 
     _lock: threading.Lock = PrivateAttr(default_factory=threading.Lock)
-    _path: Path = PrivateAttr()
+    _path: Path = PrivateAttr(default=None)
+
+    def __init__(self, **data):
+        path = data.pop("_path", None)
+        super().__init__(**data)
+        if path is not None:
+            self._path = path
 
     def _save_statistic(self):
+        if self._path is None:
+            return
         with open(self._path, "w") as f:
             f.write(self.model_dump_json(indent=4))
 
@@ -110,7 +118,7 @@ class RunStatistic(BaseModel):
         with self._lock:
             self.finished_reports_detail[report_name] = finished_report
 
-            match finished_report():
+            match finished_report:
                 case ProcessedReportInfo():
                     self.processed_reports += 1
                     self.processed_candidates += finished_report.total_candidates_count
@@ -130,6 +138,10 @@ class RunStatistic(BaseModel):
                     raise ValueError(f"Unknown finished report info: {finished_report}")
 
             self._save_statistic()
+
+    def set_path(self, path: Path):
+        with self._lock:
+            self._path = path
 
 
 class MethodSignature(BaseModel):

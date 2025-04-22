@@ -34,7 +34,7 @@ from crash_locator.my_types import (
 from crash_locator.utils.helper import get_method_type, MethodType
 from crash_locator.utils.java_parser import get_application_code
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger()
 
 
 def report_completion(report):

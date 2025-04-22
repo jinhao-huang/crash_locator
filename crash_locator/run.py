@@ -17,7 +17,6 @@ from crash_locator.my_types import (
     SkippedReportInfo,
     FailedReportInfo,
 )
-from crash_locator.utils.llm import query_filter_candidate
 from crash_locator.exceptions import TaskCancelledException
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
@@ -77,6 +76,8 @@ def _process_report(
 ):
     task_logger = TaskAdapter(logger, {"task_name": task_name})
     set_thread_logger(task_logger)
+
+    from crash_locator.utils.llm import query_filter_candidate
 
     try:
         report_name = pre_check_report_dir.name

@@ -10,8 +10,6 @@ from crash_locator.my_types import RunStatistic
 
 load_dotenv()
 
-_thread_local = threading.local()
-
 
 class Config:
     ROOT_DIR: Path = Path.cwd()
@@ -23,7 +21,7 @@ class Config:
     OPENAI_API_KEY: str = os.environ.get("OPENAI_API_KEY")
     OPENAI_MODEL: str = os.environ.get("OPENAI_MODEL")
 
-    RESULT_DIR: Path = DATA_DIR / "results" / "20250421"
+    RESULT_DIR: Path = DATA_DIR / "results" / "20250422"
     RESULT_STATISTIC_PATH: Path = RESULT_DIR / "statistic.json"
     RESULT_LOG_FILE_PATH: Path = RESULT_DIR / "app.log"
 
@@ -128,12 +126,15 @@ def setup_logging(log_file_path: Path):
     )
 
 
-def set_thread_logger(logger):
+_thread_local = threading.local()
+
+
+def set_thread_logger(logger: logging.LoggerAdapter):
     global _thread_local
     setattr(_thread_local, "logger", logger)
 
 
-def get_thread_logger():
+def get_thread_logger() -> logging.LoggerAdapter:
     global _thread_local
     if hasattr(_thread_local, "logger"):
         return getattr(_thread_local, "logger")
@@ -148,19 +149,15 @@ def clear_thread_logger():
 
 def init_statistic() -> RunStatistic:
     if Config.RESULT_STATISTIC_PATH.exists():
-        # logger.info(f"Load statistic from {Config.RESULT_STATISTIC_PATH}")
         with open(Config.RESULT_STATISTIC_PATH, "r") as f:
-            run_statistic = RunStatistic(
-                **json.load(f), _path=Config.RESULT_STATISTIC_PATH
-            )
+            run_statistic = RunStatistic(**json.load(f))
     else:
-        # logger.info("No statistic file found, create a new one")
         run_statistic = RunStatistic(
             model_info=RunStatistic.ModelInfo(
                 model_name=Config.OPENAI_MODEL,
             ),
-            _path=Config.RESULT_STATISTIC_PATH,
         )
+    run_statistic.set_path(Config.RESULT_STATISTIC_PATH)
 
     return run_statistic
 
