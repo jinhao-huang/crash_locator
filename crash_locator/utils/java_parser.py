@@ -11,13 +11,9 @@ from crash_locator.exceptions import (
     UnknownException,
 )
 from crash_locator.utils.tree_sitter_helper import get_parent, get_child
-import logging
 
 JAVA_LANGUAGE = Language(tree_sitter_java.language())
 parser = Parser(JAVA_LANGUAGE)
-
-
-logger = logging.getLogger(__name__)
 
 
 def get_application_code(
@@ -30,7 +26,6 @@ def get_application_code(
         NoMethodFoundCodeError: No method found in the file.
         MultipleMethodsCodeError: Multiple methods found in the file.
     """
-    logger.debug(f"Getting application code for {method_signature}")
     application_code_path = Config.APPLICATION_CODE_PATH(apk_name)
     return _get_method_code_in_file(
         application_code_path / method_signature.into_path(), method_signature

@@ -1,8 +1,5 @@
 import re
-import logging
 from crash_locator.exceptions import InvalidSignatureException
-
-logger = logging.getLogger(__name__)
 
 
 def parse_signature(method_signature):
