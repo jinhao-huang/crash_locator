@@ -1,5 +1,6 @@
 from openai import OpenAI
 from crash_locator.config import Config, get_thread_logger
+from openai import RateLimitError
 from crash_locator.my_types import ReportInfo, Candidate, RunStatistic
 from crash_locator.prompt import Prompt
 from crash_locator.exceptions import UnExpectedResponseException, TaskCancelledException
@@ -15,6 +16,15 @@ from typing import Callable
 import json
 from pathlib import Path
 from copy import deepcopy
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_random_exponential,
+    retry_if_exception_type,
+    before_log,
+    after_log,
+)
+import logging
 
 logger = get_thread_logger()
 
@@ -33,6 +43,13 @@ def _purge_conversation(conversation: list[ChatCompletionMessageParam]):
     return messages
 
 
+@retry(
+    wait=wait_random_exponential(min=1, max=60),
+    stop=stop_after_attempt(6),
+    retry=retry_if_exception_type(RateLimitError),
+    before=before_log(logger, logging.WARNING),
+    after=after_log(logger, logging.WARNING),
+)
 def _query_llm(messages: list[ChatCompletionMessageParam]):
     conversation = _purge_conversation(messages)
     logger.info("Preparing to query LLM")
