@@ -23,8 +23,9 @@ import logging
 import json
 import threading
 import traceback
+from multiprocessing import Process
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger()
 statistic_lock = threading.Lock()
 
 
@@ -131,12 +132,12 @@ def _process_report(
         with statistic_lock:
             if report_name in statistic.finished_reports_detail:
                 task_logger.info(f"Report {report_name} already processed, skip it")
-                return report_name
+                return
 
         report_path = pre_check_report_dir / Config.PRE_CHECK_REPORT_INFO_NAME
         if not report_path.exists():
             task_logger.error(f"Report info file {report_path} does not exist")
-            return None
+            return
 
         with open(report_path, "r") as f:
             report_info = ReportInfo(**json.load(f))
@@ -144,7 +145,7 @@ def _process_report(
         if len(report_info.candidates) == 1:
             task_logger.info(f"Report {report_name} has only one candidate, skip it")
             _add_statistic(statistic, report_name, SkippedReportInfo())
-            return report_name
+            return
 
         _copy_report(report_name, task_logger)
 
@@ -162,12 +163,12 @@ def _process_report(
             ),
         )
         task_logger.info(f"Finished processing report {report_name}")
-        return report_name
+        return
     finally:
         clear_thread_logger()
 
 
-def run():
+def _tpe_runner():
     setup_logging(Config.RESULT_LOG_FILE_PATH)
     logger.info("Start processing reports")
     logger.info(f"Maximum worker threads: {Config.MAX_WORKERS}")
@@ -208,3 +209,13 @@ def run():
                     )
 
     logger.info(f"Statistic: {statistic}")
+
+
+def run():
+    try:
+        process = Process(target=_tpe_runner)
+        process.start()
+        process.join()
+    except KeyboardInterrupt:
+        process.terminate()
+        process.join()
