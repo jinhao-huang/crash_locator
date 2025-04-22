@@ -1,6 +1,7 @@
+import threading
 from typing import Literal
 from typing import Annotated
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 import re
 from crash_locator.exceptions import InvalidSignatureException
 from pathlib import Path
@@ -52,6 +53,19 @@ FinishedReport = Annotated[
 
 
 class RunStatistic(BaseModel):
+    class TokenUsage(BaseModel):
+        input_tokens: int = 0
+        output_tokens: int = 0
+
+        def __add__(self, other: Self) -> Self:
+            return self.__class__(
+                input_tokens=self.input_tokens + other.input_tokens,
+                output_tokens=self.output_tokens + other.output_tokens,
+            )
+
+    class ModelInfo(BaseModel):
+        model_name: str
+
     # Processed reports after filtering
     processed_reports: int = 0
     # Count of candidates of processed reports before filtering
@@ -69,9 +83,53 @@ class RunStatistic(BaseModel):
     # Count of failed reports
     failed_reports: int = 0
 
+    token_usage: TokenUsage = TokenUsage()
+    model_info: ModelInfo
+
     finished_reports_detail: dict[str, FinishedReport] = Field(
         default_factory=dict,
     )
+
+    _lock: threading.Lock = PrivateAttr(default_factory=threading.Lock)
+    _path: Path = PrivateAttr()
+
+    def _save_statistic(self):
+        with open(self._path, "w") as f:
+            f.write(self.model_dump_json(indent=4))
+
+    def add_token_usage(self, token_usage: TokenUsage):
+        with self._lock:
+            self.token_usage += token_usage
+            self._save_statistic()
+
+    def add_report(
+        self,
+        report_name: str,
+        finished_report: FinishedReport,
+    ):
+        with self._lock:
+            self.finished_reports_detail[report_name] = finished_report
+
+            match finished_report():
+                case ProcessedReportInfo():
+                    self.processed_reports += 1
+                    self.processed_candidates += finished_report.total_candidates_count
+                    self.filtered_candidates += (
+                        finished_report.filtered_candidates_count
+                    )
+                    self.retained_candidates += (
+                        finished_report.retained_candidates_count
+                    )
+                    if finished_report.is_buggy_method_filtered:
+                        self.filtered_buggy_method += 1
+                case SkippedReportInfo():
+                    self.skipped_reports += 1
+                case FailedReportInfo():
+                    self.failed_reports += 1
+                case _:
+                    raise ValueError(f"Unknown finished report info: {finished_report}")
+
+            self._save_statistic()
 
 
 class MethodSignature(BaseModel):

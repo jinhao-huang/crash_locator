@@ -1,10 +1,12 @@
 from pathlib import Path
 import os
+import json
 from dotenv import load_dotenv
 from datetime import datetime
 import logging.config
 import threading
 from crash_locator.exceptions import LoggerNotFoundException
+from crash_locator.my_types import RunStatistic
 
 load_dotenv()
 
@@ -142,3 +144,25 @@ def clear_thread_logger():
     global _thread_local
     if hasattr(_thread_local, "logger"):
         delattr(_thread_local, "logger")
+
+
+def init_statistic() -> RunStatistic:
+    if Config.RESULT_STATISTIC_PATH.exists():
+        # logger.info(f"Load statistic from {Config.RESULT_STATISTIC_PATH}")
+        with open(Config.RESULT_STATISTIC_PATH, "r") as f:
+            run_statistic = RunStatistic(
+                **json.load(f), _path=Config.RESULT_STATISTIC_PATH
+            )
+    else:
+        # logger.info("No statistic file found, create a new one")
+        run_statistic = RunStatistic(
+            model_info=RunStatistic.ModelInfo(
+                model_name=Config.OPENAI_MODEL,
+            ),
+            _path=Config.RESULT_STATISTIC_PATH,
+        )
+
+    return run_statistic
+
+
+run_statistic: RunStatistic = init_statistic()

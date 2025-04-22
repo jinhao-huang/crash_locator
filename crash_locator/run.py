@@ -6,6 +6,7 @@ from crash_locator.config import (
     setup_logging,
     set_thread_logger,
     clear_thread_logger,
+    run_statistic,
 )
 from crash_locator.my_types import (
     ReportInfo,
@@ -14,19 +15,16 @@ from crash_locator.my_types import (
     ProcessedReportInfo,
     SkippedReportInfo,
     FailedReportInfo,
-    FinishedReport,
 )
 from crash_locator.utils.llm import query_filter_candidate
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 import logging
 import json
-import threading
 import traceback
 from multiprocessing import Process
 
 logger = logging.getLogger()
-statistic_lock = threading.Lock()
 
 
 def _is_buggy_method_filtered(
@@ -36,51 +34,6 @@ def _is_buggy_method_filtered(
         if candidate.signature == report_info.buggy_method:
             return False
     return True
-
-
-def _save_statistic(statistic: RunStatistic):
-    with open(Config.RESULT_STATISTIC_PATH, "w") as f:
-        f.write(statistic.model_dump_json(indent=4))
-
-
-def _add_statistic(
-    statistic: RunStatistic,
-    report_name: str,
-    finished_report_info: FinishedReport,
-):
-    with statistic_lock:
-        if isinstance(finished_report_info, ProcessedReportInfo):
-            statistic.processed_reports += 1
-            statistic.processed_candidates += (
-                finished_report_info.total_candidates_count
-            )
-            statistic.filtered_candidates += (
-                finished_report_info.filtered_candidates_count
-            )
-            statistic.retained_candidates += (
-                finished_report_info.retained_candidates_count
-            )
-            if finished_report_info.is_buggy_method_filtered:
-                statistic.filtered_buggy_method += 1
-            statistic.finished_reports_detail[report_name] = finished_report_info
-        elif isinstance(finished_report_info, SkippedReportInfo):
-            statistic.skipped_reports += 1
-        elif isinstance(finished_report_info, FailedReportInfo):
-            statistic.failed_reports += 1
-            statistic.finished_reports_detail[report_name] = finished_report_info
-
-        _save_statistic(statistic)
-
-
-def _get_statistic() -> RunStatistic:
-    if Config.RESULT_STATISTIC_PATH.exists():
-        logger.info(f"Load statistic from {Config.RESULT_STATISTIC_PATH}")
-        with open(Config.RESULT_STATISTIC_PATH, "r") as f:
-            statistic = RunStatistic(**json.load(f))
-    else:
-        logger.info("No statistic file found, create a new one")
-        statistic = RunStatistic()
-    return statistic
 
 
 def _get_work_list() -> list[Path]:
@@ -129,10 +82,9 @@ def _process_report(
         task_logger.info(f"Processing report {report_name}")
         task_logger.debug(f"Report path: {pre_check_report_dir}")
 
-        with statistic_lock:
-            if report_name in statistic.finished_reports_detail:
-                task_logger.info(f"Report {report_name} already processed, skip it")
-                return
+        if report_name in statistic.finished_reports_detail:
+            task_logger.info(f"Report {report_name} already processed, skip it")
+            return
 
         report_path = pre_check_report_dir / Config.PRE_CHECK_REPORT_INFO_NAME
         if not report_path.exists():
@@ -144,15 +96,14 @@ def _process_report(
 
         if len(report_info.candidates) == 1:
             task_logger.info(f"Report {report_name} has only one candidate, skip it")
-            _add_statistic(statistic, report_name, SkippedReportInfo())
+            statistic.add_report(report_name, SkippedReportInfo())
             return
 
         _copy_report(report_name, task_logger)
 
         retained_candidates = query_filter_candidate(report_info)
 
-        _add_statistic(
-            statistic,
+        statistic.add_report(
             report_name,
             ProcessedReportInfo(
                 total_candidates_count=len(report_info.candidates),
@@ -173,7 +124,6 @@ def _tpe_runner():
     logger.info("Start processing reports")
     logger.info(f"Maximum worker threads: {Config.MAX_WORKERS}")
 
-    statistic = _get_statistic()
     work_list = _get_work_list()
     logger.info(f"Found {len(work_list)} reports to process")
 
@@ -183,7 +133,7 @@ def _tpe_runner():
         ) as executor:
             future_to_report = {
                 executor.submit(
-                    _process_report, report_dir, statistic, report_dir.name
+                    _process_report, report_dir, run_statistic, report_dir.name
                 ): report_dir.name
                 for report_dir in work_list
             }
@@ -199,8 +149,7 @@ def _tpe_runner():
                 except Exception as e:
                     logger.critical(f"Error processing report: {e}")
                     logger.critical(f"{traceback.format_exc()}")
-                    _add_statistic(
-                        statistic,
+                    run_statistic.add_report(
                         report_name,
                         FailedReportInfo(
                             exception_type=e.__class__.__name__,
@@ -208,7 +157,7 @@ def _tpe_runner():
                         ),
                     )
 
-    logger.info(f"Statistic: {statistic}")
+    logger.info(f"Statistic: {run_statistic}")
 
 
 def run():
