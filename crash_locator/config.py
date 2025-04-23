@@ -17,6 +17,8 @@ class Config:
 
     MAX_WORKERS: int = int(os.environ.get("MAX_WORKERS", "4"))
 
+    RETRY_FAILED_REPORTS: bool = True
+
     OPENAI_BASE_URL: str = os.environ.get("OPENAI_BASE_URL")
     OPENAI_API_KEY: str = os.environ.get("OPENAI_API_KEY")
     OPENAI_MODEL: str = os.environ.get("OPENAI_MODEL")

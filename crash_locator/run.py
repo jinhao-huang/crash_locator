@@ -42,7 +42,31 @@ def _get_work_list() -> list[Path]:
         return [Config.DEBUG_PRE_CHECK_REPORT_DIR]
     else:
         logger.info(f"Process all reports in {Config.PRE_CHECK_REPORTS_DIR}")
-        return list(Config.PRE_CHECK_REPORTS_DIR.iterdir())
+        work_list = []
+        for report_dir in Config.PRE_CHECK_REPORTS_DIR.iterdir():
+            if not report_dir.is_dir():
+                continue
+
+            report_info_path = report_dir / Config.PRE_CHECK_REPORT_INFO_NAME
+            if not report_info_path.exists():
+                continue
+
+            report_name = report_dir.name
+            if report_name in run_statistic.finished_reports_detail:
+                finished_report = run_statistic.finished_reports_detail[report_name]
+                if (not isinstance(finished_report, FailedReportInfo)) or (
+                    Config.RETRY_FAILED_REPORTS is False
+                ):
+                    continue
+                else:
+                    run_statistic.remove_report(report_name)
+                    logger.info(f"Report {report_name} failed, retry it, ")
+
+            work_list.append(report_dir)
+
+        logger.info(f"Found {len(work_list)} reports to process")
+        logger.debug(f"Pending reports: {work_list}")
+        return work_list
 
 
 def _copy_report(report_name: str, task_logger: logging.LoggerAdapter):
@@ -84,15 +108,7 @@ def _process_report(
         task_logger.info(f"Processing report {report_name}")
         task_logger.debug(f"Report path: {pre_check_report_dir}")
 
-        if report_name in statistic.finished_reports_detail:
-            task_logger.info(f"Report {report_name} already processed, skip it")
-            return
-
         report_path = pre_check_report_dir / Config.PRE_CHECK_REPORT_INFO_NAME
-        if not report_path.exists():
-            task_logger.error(f"Report info file {report_path} does not exist")
-            return
-
         with open(report_path, "r") as f:
             report_info = ReportInfo(**json.load(f))
 

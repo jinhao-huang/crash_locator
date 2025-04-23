@@ -139,6 +139,23 @@ class RunStatistic(BaseModel):
 
             self._save_statistic()
 
+    def remove_report(self, report_name: str):
+        """
+        Remove a (failed) report from statistic
+        """
+        with self._lock:
+            if report_name in self.finished_reports_detail:
+                if isinstance(
+                    self.finished_reports_detail[report_name], FailedReportInfo
+                ):
+                    del self.finished_reports_detail[report_name]
+                    self.failed_reports -= 1
+                    self._save_statistic()
+                else:
+                    raise ValueError(f"Report {report_name} is not failed")
+            else:
+                raise ValueError(f"Report {report_name} not found")
+
     def set_path(self, path: Path):
         with self._lock:
             self._path = path
