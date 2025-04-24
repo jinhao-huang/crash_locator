@@ -124,6 +124,8 @@ def _methods_parameters_filter(
             # Use -2 index to find the type identifier
             # Use 0 index is bad due to possible existence of "modifiers"
             type_identifier = parameter.named_children[-2]
+            if type_identifier.type == "generic_type":
+                type_identifier = type_identifier.named_children[0]
             if type_identifier.text.decode("utf8") != expected_parameter:
                 matched = False
                 break
