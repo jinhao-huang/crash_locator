@@ -62,24 +62,53 @@ class Config:
     def APPLICATION_CODE_PATH(apk_name: str) -> Path:
         return Config.APPLICATION_CODE_DIR / apk_name / "sources"
 
-    ANDROID_CG_PATH = lambda v: f"Data/AndroidCG/android{v}/android{v}_cg.txt"
-    APK_CG_PATH = lambda apk_name: f"Data/ApkCG/{apk_name}/{apk_name}_cg.txt"
-    ANDROID_CG_CALLED_CACHE_PATH = (
-        lambda v,
-        hashed_signature: f"Data/CgCache/AndroidCG_called_cache/android_{v}/{hashed_signature}.json"
-    )
-    ANDROID_CG_CALLER_CACHE_PATH = (
-        lambda v,
-        hashed_signature: f"Data/CgCache/AndroidCG_caller_cache/android_{v}/{hashed_signature}.json"
-    )
-    APK_CG_CALLED_CACHE_PATH = (
-        lambda apk_name,
-        hashed_signature: f"Data/CgCache/ApkCG_called_cache/{apk_name}/{hashed_signature}.json"
-    )
-    APK_CG_CALLER_CACHE_PATH = (
-        lambda apk_name,
-        hashed_signature: f"Data/CgCache/ApkCG_caller_cache/{apk_name}/{hashed_signature}.json"
-    )
+    @staticmethod
+    def ANDROID_CG_PATH(v: str) -> Path:
+        return Config.DATA_DIR / "AndroidCG" / f"android{v}" / f"android{v}_cg.txt"
+
+    @staticmethod
+    def APK_CG_PATH(apk_name: str) -> Path:
+        return Config.DATA_DIR / "ApkCG" / apk_name / f"{apk_name}_cg.txt"
+
+    @staticmethod
+    def ANDROID_CG_CALLED_CACHE_PATH(v: str, hashed_signature: str) -> Path:
+        return (
+            Config.DATA_DIR
+            / "CgCache"
+            / "AndroidCG_called_cache"
+            / f"android_{v}"
+            / f"{hashed_signature}.json"
+        )
+
+    @staticmethod
+    def ANDROID_CG_CALLER_CACHE_PATH(v: str, hashed_signature: str) -> Path:
+        return (
+            Config.DATA_DIR
+            / "CgCache"
+            / "AndroidCG_caller_cache"
+            / f"android_{v}"
+            / f"{hashed_signature}.json"
+        )
+
+    @staticmethod
+    def APK_CG_CALLED_CACHE_PATH(apk_name: str, hashed_signature: str) -> Path:
+        return (
+            Config.DATA_DIR
+            / "CgCache"
+            / "ApkCG_called_cache"
+            / apk_name
+            / f"{hashed_signature}.json"
+        )
+
+    @staticmethod
+    def APK_CG_CALLER_CACHE_PATH(apk_name: str, hashed_signature: str) -> Path:
+        return (
+            Config.DATA_DIR
+            / "CgCache"
+            / "ApkCG_caller_cache"
+            / apk_name
+            / f"{hashed_signature}.json"
+        )
 
 
 def setup_logging(log_file_dir: Path):
