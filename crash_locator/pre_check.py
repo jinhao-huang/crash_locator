@@ -404,10 +404,13 @@ def main():
     setup_logging(Config.PRE_CHECK_DIR)
 
     statistic = PreCheckStatistic()
+    work_list = Config.CRASH_REPORTS_DIR.iterdir()
     if Config.DEBUG:
-        work_list = [Config.DEBUG_CRASH_REPORT_DIR]
-    else:
-        work_list = Config.CRASH_REPORTS_DIR.iterdir()
+        work_list = [
+            report_dir
+            for report_dir in work_list
+            if report_dir.name in Config.DEBUG_CRASH_REPORTS
+        ]
 
     with logging_redirect_tqdm():
         for crash_report_dir in tqdm(list(work_list)):

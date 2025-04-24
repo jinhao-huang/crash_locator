@@ -8,7 +8,7 @@ import threading
 from crash_locator.exceptions import LoggerNotFoundException
 from crash_locator.my_types import RunStatistic
 
-load_dotenv()
+load_dotenv(override=True)
 
 
 class Config:
@@ -52,10 +52,12 @@ class Config:
     RETRY_FAILED_REPORTS: bool = True
 
     DEBUG: bool = os.environ.get("DEBUG", "false").lower() == "true"
-    DEBUG_CRASH_REPORT_DIR: Path = Path(os.environ.get("DEBUG_CRASH_REPORT_DIR"))
-    DEBUG_PRE_CHECK_REPORT_DIR: Path = Path(
-        os.environ.get("DEBUG_PRE_CHECK_REPORT_DIR")
+    DEBUG_CRASH_REPORTS: list[str] = os.environ.get("DEBUG_CRASH_REPORTS", "").split(
+        ","
     )
+    DEBUG_PRE_CHECK_REPORTS: list[str] = os.environ.get(
+        "DEBUG_PRE_CHECK_REPORTS", ""
+    ).split(",")
 
     APPLICATION_CODE_DIR: Path = DATA_DIR / "application_source_code"
 

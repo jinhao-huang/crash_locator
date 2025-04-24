@@ -37,36 +37,35 @@ def _is_buggy_method_filtered(
 
 
 def _get_work_list() -> list[Path]:
-    if Config.DEBUG:
-        logger.info(f"Use debug mode, only process {Config.DEBUG_PRE_CHECK_REPORT_DIR}")
-        return [Config.DEBUG_PRE_CHECK_REPORT_DIR]
-    else:
-        logger.info(f"Process all reports in {Config.PRE_CHECK_REPORTS_DIR}")
-        work_list = []
-        for report_dir in Config.PRE_CHECK_REPORTS_DIR.iterdir():
-            if not report_dir.is_dir():
+    logger.info(f"Process all reports in {Config.PRE_CHECK_REPORTS_DIR}")
+    work_list = []
+    for report_dir in Config.PRE_CHECK_REPORTS_DIR.iterdir():
+        if not report_dir.is_dir():
+            continue
+
+        report_name = report_dir.name
+        report_info_path = Config.PRE_CHECK_REPORT_INFO_PATH(report_name)
+        if not report_info_path.exists():
+            continue
+
+        if Config.DEBUG and report_name not in Config.DEBUG_PRE_CHECK_REPORTS:
+            continue
+
+        if report_name in run_statistic.finished_reports_detail:
+            finished_report = run_statistic.finished_reports_detail[report_name]
+            if (not isinstance(finished_report, FailedReportInfo)) or (
+                Config.RETRY_FAILED_REPORTS is False
+            ):
                 continue
+            else:
+                run_statistic.remove_report(report_name)
+                logger.info(f"Report {report_name} failed, retry it, ")
 
-            report_name = report_dir.name
-            report_info_path = Config.PRE_CHECK_REPORT_INFO_PATH(report_name)
-            if not report_info_path.exists():
-                continue
+        work_list.append(report_dir)
 
-            if report_name in run_statistic.finished_reports_detail:
-                finished_report = run_statistic.finished_reports_detail[report_name]
-                if (not isinstance(finished_report, FailedReportInfo)) or (
-                    Config.RETRY_FAILED_REPORTS is False
-                ):
-                    continue
-                else:
-                    run_statistic.remove_report(report_name)
-                    logger.info(f"Report {report_name} failed, retry it, ")
-
-            work_list.append(report_dir)
-
-        logger.info(f"Found {len(work_list)} reports to process")
-        logger.debug(f"Pending reports: {work_list}")
-        return work_list
+    logger.info(f"Found {len(work_list)} reports to process")
+    logger.debug(f"Pending reports: {work_list}")
+    return work_list
 
 
 def _copy_report(report_name: str, task_logger: logging.LoggerAdapter):
