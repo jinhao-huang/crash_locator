@@ -99,7 +99,7 @@ def _methods_parameters_filter(
     method_signature: MethodSignature,
 ) -> list[Node]:
     parameters = (
-        [param.split(".")[-1] for param in method_signature.parameters]
+        [param.split(".")[-1].split("$")[-1] for param in method_signature.parameters]
         if method_signature.parameters is not None
         else None
     )
@@ -120,7 +120,10 @@ def _methods_parameters_filter(
         for parameter, expected_parameter in zip(
             formal_parameters.named_children, parameters
         ):
-            type_identifier = parameter.named_children[0]
+            # The type of type_identifier is not unique(e.g. "type_identifier", "integer_type")
+            # Use -2 index to find the type identifier
+            # Use 0 index is bad due to possible existence of "modifiers"
+            type_identifier = parameter.named_children[-2]
             if type_identifier.text.decode("utf8") != expected_parameter:
                 matched = False
                 break
