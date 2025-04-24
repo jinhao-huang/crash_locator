@@ -141,7 +141,7 @@ def report_completion(report):
     report["Crash Info in Dataset"]["stack trace signature"] = stack_trace
 
 
-def find_terminal_api(candidates: list[dict]) -> str | None:
+def _find_terminal_api(candidates: list[dict]) -> str | None:
     for candidate in candidates:
         for reason in candidate["Reasons"]:
             if reason.get("M_app Is Terminate?") is True:
@@ -181,7 +181,7 @@ def _get_and_check_framework_stack(
     return framework_trace, framework_short_trace
 
 
-def candidate_into_reason(
+def _candidate_into_reason(
     candidate: dict, framework_entry_api: str, terminal_api: str | None
 ) -> CandidateReason:
     def _extract_var4_field_and_passed_method(explanation_info):
@@ -265,12 +265,6 @@ def candidate_into_reason(
             raise NotImplementedError(f"Reason type {reason_type} is not implemented")
 
 
-def post_check_statistic(report: ReportInfo, statistic: PreCheckStatistic):
-    if len(report.candidates) not in statistic.candidates_nums_distribution:
-        statistic.candidates_nums_distribution[len(report.candidates)] = 0
-    statistic.candidates_nums_distribution[len(report.candidates)] += 1
-
-
 def _check_exception_info_exist(report: dict) -> None:
     if "Fault Localization by CrashTracker" not in report:
         raise EmptyExceptionInfoException()
@@ -296,9 +290,7 @@ def _check_candidate_code_exist(report: ReportInfo) -> None:
             raise CandidateCodeNotFoundException(str(candidate.signature))
 
 
-def pre_check(pre_check_reports_dir: Path) -> ReportInfo:
-    report_name = pre_check_reports_dir.name
-    crash_report_path = pre_check_reports_dir / f"{report_name}.json"
+def pre_check(crash_report_path: Path) -> ReportInfo:
     report = json.load(open(crash_report_path, "r"))
 
     _check_exception_info_exist(report)
@@ -313,7 +305,7 @@ def pre_check(pre_check_reports_dir: Path) -> ReportInfo:
         stack_trace, stack_trace_short_api
     )
     framework_entry_api = framework_trace[-1]
-    terminal_api = find_terminal_api(
+    terminal_api = _find_terminal_api(
         report["Fault Localization by CrashTracker"]["Buggy Method Candidates"]
     )
 
@@ -348,7 +340,7 @@ def pre_check(pre_check_reports_dir: Path) -> ReportInfo:
                 signature=MethodSignature.from_str(candidate["Candidate Signature"])
                 if candidate["Candidate Signature"] != ""
                 else MethodSignature.from_str(candidate["Candidate Name"]),
-                reasons=candidate_into_reason(
+                reasons=_candidate_into_reason(
                     candidate, framework_entry_api, terminal_api
                 ),
             )
@@ -365,28 +357,53 @@ def pre_check(pre_check_reports_dir: Path) -> ReportInfo:
     _check_buggy_method_candidates_exist(report_info)
     _check_candidate_code_exist(report_info)
 
-    output_file_path = pre_check_reports_dir / Config.PRE_CHECK_REPORT_INFO_NAME
-    with open(output_file_path, "w") as json_file:
-        json_file.write(report_info.model_dump_json(indent=4))
-
     return report_info
 
 
-if __name__ == "__main__":
+def _successful_statistic(report: ReportInfo, statistic: PreCheckStatistic):
+    if len(report.candidates) not in statistic.candidates_nums_distribution:
+        statistic.candidates_nums_distribution[len(report.candidates)] = 0
+    statistic.candidates_nums_distribution[len(report.candidates)] += 1
+
+    statistic.valid_reports += 1
+
+
+def _failed_statistic(
+    report_name: str, statistic: PreCheckStatistic, e: PreCheckException
+):
+    exception_name = e.__class__.__name__
+    if exception_name not in statistic.invalid_report_exceptions:
+        statistic.invalid_report_exceptions[exception_name] = 0
+
+    statistic.invalid_report_exceptions[exception_name] += 1
+    statistic.invalid_reports_detail[report_name] = str(e)
+
+    statistic.invalid_reports += 1
+
+
+def _save_report(report_name: str, report_info: ReportInfo) -> None:
+    pre_check_report_dir = Config.PRE_CHECK_REPORTS_DIR / report_name
+    pre_check_report_dir.mkdir(parents=True, exist_ok=True)
+
+    shutil.copy(Config.CRASH_REPORT_PATH(report_name), pre_check_report_dir)
+
+    with open(pre_check_report_dir / Config.PRE_CHECK_REPORT_INFO_NAME, "w") as f:
+        f.write(report_info.model_dump_json(indent=4))
+
+
+def main():
     setup_logging(Config.PRE_CHECK_LOG_FILE_PATH)
 
-    crash_reports_dir = Config.CRASH_REPORTS_DIR
-    pre_check_reports_dir = Config.PRE_CHECK_REPORTS_DIR
     statistic = PreCheckStatistic()
     if Config.DEBUG:
         work_list = [Config.DEBUG_CRASH_REPORT_DIR]
     else:
-        work_list = crash_reports_dir.iterdir()
+        work_list = Config.CRASH_REPORTS_DIR.iterdir()
 
     with logging_redirect_tqdm():
         for crash_report_dir in tqdm(list(work_list)):
             report_name = crash_report_dir.name
-            crash_report_path = crash_report_dir / f"{report_name}.json"
+            crash_report_path = Config.CRASH_REPORT_PATH(report_name)
             if not crash_report_path.exists():
                 logger.error(f"The directory {crash_report_dir} is not a crash report")
                 continue
@@ -395,24 +412,12 @@ if __name__ == "__main__":
             logger.info(f"Pre-checking report {report_name}")
             logger.debug(f"Crash report directory: {crash_report_dir}")
             logger.debug(f"Crash report path: {crash_report_path}")
-            pre_check_report_dir = pre_check_reports_dir / report_name
-            pre_check_report_dir.mkdir(parents=True, exist_ok=True)
-            shutil.copy(crash_report_path, pre_check_report_dir)
 
             try:
-                report_info = pre_check(pre_check_report_dir)
-                post_check_statistic(report_info, statistic)
-
+                report_info = pre_check(crash_report_path)
             except PreCheckException as e:
                 logger.error(f"Crash report {report_name} pre-check failed: {e}")
-                statistic.invalid_reports += 1
-                shutil.rmtree(pre_check_report_dir)
-                exception_name = e.__class__.__name__
-                if exception_name not in statistic.invalid_report_exceptions:
-                    statistic.invalid_report_exceptions[exception_name] = 0
-                statistic.invalid_report_exceptions[exception_name] += 1
-                statistic.invalid_reports_detail[report_name] = str(e)
-                continue
+                _failed_statistic(report_name, statistic, e)
             except Exception as e:
                 logger.exception(e)
                 logger.critical(
@@ -420,10 +425,15 @@ if __name__ == "__main__":
                 )
                 logger.critical(f"Crash report path: {crash_report_dir}")
                 exit(1)
-
-            logger.info(f"Crash report {report_name} pre-check finished")
-            statistic.valid_reports += 1
+            else:
+                logger.info(f"Crash report {report_name} pre-check successful")
+                _save_report(report_name, report_info)
+                _successful_statistic(report_info, statistic)
 
     with open(Config.PRE_CHECK_STATISTIC_PATH, "w") as f:
         logger.info(f"Pre-check statistic: {statistic}")
         f.write(statistic.model_dump_json(indent=4))
+
+
+if __name__ == "__main__":
+    main()

@@ -15,14 +15,25 @@ class Config:
     ROOT_DIR: Path = Path.cwd()
     DATA_DIR: Path = ROOT_DIR / "Data"
 
-    MAX_WORKERS: int = int(os.environ.get("MAX_WORKERS", "4"))
-
-    RETRY_FAILED_REPORTS: bool = True
-
     OPENAI_BASE_URL: str = os.environ.get("OPENAI_BASE_URL")
     OPENAI_API_KEY: str = os.environ.get("OPENAI_API_KEY")
     OPENAI_MODEL: str = os.environ.get("OPENAI_MODEL")
 
+    # Crash reports directory
+    CRASH_REPORTS_DIR: Path = DATA_DIR / "crash_reports" / "all-0119"
+
+    @staticmethod
+    def CRASH_REPORT_PATH(report_name: str) -> Path:
+        return Config.CRASH_REPORTS_DIR / report_name / f"{report_name}.json"
+
+    # Pre_check directory
+    PRE_CHECK_DIR: Path = DATA_DIR / "pre_check"
+    PRE_CHECK_REPORTS_DIR: Path = PRE_CHECK_DIR / "reports"
+    PRE_CHECK_LOG_FILE_PATH: Path = PRE_CHECK_DIR / "pre_check.log"
+    PRE_CHECK_REPORT_INFO_NAME: str = "report_info.json"
+    PRE_CHECK_STATISTIC_PATH: Path = PRE_CHECK_DIR / "statistic.json"
+
+    # Result directory
     RESULT_DIR: Path = DATA_DIR / "results" / "20250422"
     RESULT_STATISTIC_PATH: Path = RESULT_DIR / "statistic.json"
     RESULT_LOG_FILE_PATH: Path = RESULT_DIR / "app.log"
@@ -33,19 +44,14 @@ class Config:
     def RESULT_REPORT_FILTER_DIR(apk_name: str) -> Path:
         return Config.RESULT_REPORT_DIR(apk_name) / "filter"
 
-    CRASH_REPORTS_DIR: Path = DATA_DIR / "crash_reports" / "all-0119"
+    MAX_WORKERS: int = int(os.environ.get("MAX_WORKERS", "4"))
+    RETRY_FAILED_REPORTS: bool = True
 
     DEBUG: bool = os.environ.get("DEBUG", "false").lower() == "true"
     DEBUG_CRASH_REPORT_DIR: Path = Path(os.environ.get("DEBUG_CRASH_REPORT_DIR"))
     DEBUG_PRE_CHECK_REPORT_DIR: Path = Path(
         os.environ.get("DEBUG_PRE_CHECK_REPORT_DIR")
     )
-
-    PRE_CHECK_DIR: Path = DATA_DIR / "pre_check"
-    PRE_CHECK_REPORTS_DIR: Path = PRE_CHECK_DIR / "reports"
-    PRE_CHECK_LOG_FILE_PATH: Path = PRE_CHECK_DIR / "pre_check.log"
-    PRE_CHECK_REPORT_INFO_NAME: str = "report_info.json"
-    PRE_CHECK_STATISTIC_PATH: Path = PRE_CHECK_DIR / "statistic.json"
 
     APPLICATION_CODE_DIR: Path = DATA_DIR / "application_source_code"
 
