@@ -47,11 +47,11 @@ def _get_work_list() -> list[Path]:
             if not report_dir.is_dir():
                 continue
 
-            report_info_path = report_dir / Config.PRE_CHECK_REPORT_INFO_NAME
+            report_name = report_dir.name
+            report_info_path = Config.PRE_CHECK_REPORT_INFO_PATH(report_name)
             if not report_info_path.exists():
                 continue
 
-            report_name = report_dir.name
             if report_name in run_statistic.finished_reports_detail:
                 finished_report = run_statistic.finished_reports_detail[report_name]
                 if (not isinstance(finished_report, FailedReportInfo)) or (
@@ -70,24 +70,16 @@ def _get_work_list() -> list[Path]:
 
 
 def _copy_report(report_name: str, task_logger: logging.LoggerAdapter):
-    original_dir = Config.PRE_CHECK_REPORTS_DIR / report_name
-    target_dir = Config.RESULT_DIR / report_name
-
+    target_dir = Config.RESULT_REPORT_DIR(report_name)
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    original_report = original_dir / f"{report_name}.json"
-    target_report = target_dir / f"{report_name}.json"
-    if not target_report.exists():
-        task_logger.info(f"Copy `{original_report}` of {report_name} to {target_dir}")
-        shutil.copy(original_report, target_report)
+    crash_report = Config.CRASH_REPORT_PATH(report_name)
+    task_logger.info(f"Copy `{crash_report}` of {report_name} to {target_dir}")
+    shutil.copy(crash_report, target_dir)
 
-    original_report_info = original_dir / Config.PRE_CHECK_REPORT_INFO_NAME
-    target_report_info = target_dir / Config.PRE_CHECK_REPORT_INFO_NAME
-    if not target_report_info.exists():
-        task_logger.info(
-            f"Copy `{original_report_info}` of {report_name} to {target_dir}"
-        )
-        shutil.copy(original_report_info, target_report_info)
+    report_info = Config.PRE_CHECK_REPORT_INFO_PATH(report_name)
+    task_logger.info(f"Copy `{report_info}` of {report_name} to {target_dir}")
+    shutil.copy(report_info, target_dir)
 
 
 class TaskAdapter(logging.LoggerAdapter):
@@ -108,8 +100,7 @@ def _process_report(
         task_logger.info(f"Processing report {report_name}")
         task_logger.debug(f"Report path: {pre_check_report_dir}")
 
-        report_path = pre_check_report_dir / Config.PRE_CHECK_REPORT_INFO_NAME
-        with open(report_path, "r") as f:
+        with open(Config.PRE_CHECK_REPORT_INFO_PATH(report_name), "r") as f:
             report_info = ReportInfo(**json.load(f))
 
         if len(report_info.candidates) == 1:
@@ -141,7 +132,7 @@ def _process_report(
 
 
 def run():
-    setup_logging(Config.RESULT_LOG_FILE_PATH)
+    setup_logging(Config.RESULT_DIR)
     logger.info("Start processing reports")
     logger.info(f"Maximum worker threads: {Config.MAX_WORKERS}")
 

@@ -387,12 +387,12 @@ def _save_report(report_name: str, report_info: ReportInfo) -> None:
 
     shutil.copy(Config.CRASH_REPORT_PATH(report_name), pre_check_report_dir)
 
-    with open(pre_check_report_dir / Config.PRE_CHECK_REPORT_INFO_NAME, "w") as f:
+    with open(Config.PRE_CHECK_REPORT_INFO_PATH(report_name), "w") as f:
         f.write(report_info.model_dump_json(indent=4))
 
 
 def main():
-    setup_logging(Config.PRE_CHECK_LOG_FILE_PATH)
+    setup_logging(Config.PRE_CHECK_DIR)
 
     statistic = PreCheckStatistic()
     if Config.DEBUG:
