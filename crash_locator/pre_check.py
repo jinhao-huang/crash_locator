@@ -282,6 +282,14 @@ def _check_buggy_method_candidates_exist(report: ReportInfo) -> None:
     raise NoBuggyMethodCandidatesException()
 
 
+def _remove_useless_candidates(report: ReportInfo) -> None:
+    report.candidates = [
+        candidate
+        for candidate in report.candidates
+        if not candidate.signature.method_name.startswith("access$")
+    ]
+
+
 def _check_candidate_code_exist(report: ReportInfo) -> None:
     for candidate in report.candidates:
         try:
@@ -355,6 +363,7 @@ def pre_check(crash_report_path: Path) -> ReportInfo:
     )
 
     _check_buggy_method_candidates_exist(report_info)
+    _remove_useless_candidates(report_info)
     _check_candidate_code_exist(report_info)
 
     return report_info
