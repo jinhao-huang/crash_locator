@@ -10,7 +10,8 @@ from crash_locator.exceptions import (
     MethodFileNotFoundException,
     UnknownException,
 )
-from crash_locator.utils.tree_sitter_helper import get_parent, get_child
+from crash_locator.utils.tree_sitter_helper import get_parent, get_child, get_type_child
+import logging
 
 JAVA_LANGUAGE = Language(tree_sitter_java.language())
 parser = Parser(JAVA_LANGUAGE)
@@ -37,11 +38,6 @@ def _get_method_code_in_file(
     method_signature: MethodSignature,
 ) -> str:
     method_name = method_signature.method_name
-    return_type = (
-        method_signature.return_type.split(".")[-1]
-        if method_signature.return_type
-        else None
-    )
 
     if not file_path.exists():
         raise MethodFileNotFoundException()
@@ -50,13 +46,9 @@ def _get_method_code_in_file(
         source_code = f.read()
     tree = parser.parse(bytes(source_code, "utf8"))
 
-    if return_type is not None:
-        return_type_query = f'(_) @type (#eq? @type "{return_type}") .'
-
     query_string = f"""
     (
         method_declaration
-        {return_type_query if return_type is not None else ""}
         (identifier) @name (#eq? @name "{method_name}")
         (formal_parameters)
     ) @method"""
@@ -67,7 +59,11 @@ def _get_method_code_in_file(
     method = _filter_methods(
         captures.get("method"),
         method_signature,
-        [_methods_parameters_filter, _anonymous_class_filter],
+        [
+            _method_return_type_filter,
+            _methods_parameters_filter,
+            _anonymous_class_filter,
+        ],
     )
     if method is None or len(method) == 0:
         raise NoMethodFoundCodeError()
@@ -94,15 +90,45 @@ def _filter_methods(
     return methods
 
 
+def _type_strip(type_str: list[str] | str | None) -> list[str] | str | None:
+    match type_str:
+        case list():
+            return [_type_strip(t) for t in type_str]
+        case str():
+            return type_str.split(".")[-1].split("$")[-1]
+        case None:
+            return None
+        case _:
+            raise UnknownException()
+
+
+def _method_return_type_filter(
+    methods: list[Node],
+    method_signature: MethodSignature,
+) -> list[Node]:
+    return_type = _type_strip(method_signature.return_type)
+    if return_type is None:
+        return methods
+
+    retained_methods = []
+    for method in methods:
+        return_type_node = get_type_child(method)
+        if return_type_node is None:
+            raise UnknownException()
+
+        if return_type_node.text.decode("utf8") != return_type:
+            continue
+
+        retained_methods.append(method)
+
+    return retained_methods
+
+
 def _methods_parameters_filter(
     methods: list[Node],
     method_signature: MethodSignature,
 ) -> list[Node]:
-    parameters = (
-        [param.split(".")[-1].split("$")[-1] for param in method_signature.parameters]
-        if method_signature.parameters is not None
-        else None
-    )
+    parameters = _type_strip(method_signature.parameters)
 
     if parameters is None:
         return methods
@@ -120,12 +146,10 @@ def _methods_parameters_filter(
         for parameter, expected_parameter in zip(
             formal_parameters.named_children, parameters
         ):
-            # The type of type_identifier is not unique(e.g. "type_identifier", "integer_type")
-            # Use -2 index to find the type identifier
-            # Use 0 index is bad due to possible existence of "modifiers"
-            type_identifier = parameter.named_children[-2]
-            if type_identifier.type == "generic_type":
-                type_identifier = type_identifier.named_children[0]
+            type_identifier = get_type_child(parameter)
+            if type_identifier is None:
+                raise UnknownException()
+
             if type_identifier.text.decode("utf8") != expected_parameter:
                 matched = False
                 break
