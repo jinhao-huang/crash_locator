@@ -4,9 +4,9 @@ import json
 from dotenv import load_dotenv
 from datetime import datetime
 import logging.config
-import threading
-from crash_locator.exceptions import LoggerNotFoundException
 from crash_locator.my_types import RunStatistic
+import asyncio
+import logging
 
 load_dotenv(override=True)
 
@@ -113,23 +113,52 @@ class Config:
         )
 
 
+# Custom filter to add task name to log records
+class TaskNameFilter(logging.Filter):
+    def filter(self, record):
+        try:
+            task = asyncio.current_task()
+        except RuntimeError:
+            record.taskName = "MainThread"
+        else:
+            if task:
+                record.taskName = task.get_name()
+            else:
+                record.taskName = "MainTask"
+
+        return True
+
+
 def setup_logging(log_file_dir: Path):
     if not log_file_dir.exists():
         log_file_dir.mkdir(parents=True, exist_ok=True)
     log_file_path = log_file_dir / "app.log"
 
+    try:
+        task = asyncio.current_task()
+        if task:
+            task.set_name("MainTask")
+    except RuntimeError:
+        pass
+
     logging.config.dictConfig(
         {
             # Always 1. Schema versioning may be added in a future release of logging
             "version": 1,
+            # Add filters definition
+            "filters": {
+                "task_name_filter": {
+                    "()": TaskNameFilter,
+                }
+            },
             # "Name of formatter" : {Formatter Config Dict}
             "formatters": {
                 # Formatter Name
                 "standard": {
                     # class is always "logging.Formatter"
                     "class": "logging.Formatter",
-                    # Optional: logging output format
-                    "format": "[%(asctime)s] [%(filename)s] [%(levelname)s] %(message)s",
+                    # Optional: logging output format - Added %(taskName)s and %(lineno)d
+                    "format": "[%(asctime)s] [%(filename)s:%(lineno)d] [%(levelname)s] [%(taskName)s] %(message)s",
                     # Optional: asctime format
                     "datefmt": "%Y-%m-%d %H:%M:%S",
                 }
@@ -146,6 +175,8 @@ def setup_logging(log_file_dir: Path):
                     "level": "INFO",
                     # The default is stderr
                     "stream": "ext://sys.stdout",
+                    # Add the filter to the handler
+                    "filters": ["task_name_filter"],
                 },
                 "file": {
                     "class": "logging.FileHandler",
@@ -154,6 +185,8 @@ def setup_logging(log_file_dir: Path):
                     "filename": log_file_path,
                     "mode": "a",
                     "encoding": "utf-8",
+                    # Add the filter to the handler
+                    "filters": ["task_name_filter"],
                 },
             },
             "loggers": {
@@ -168,27 +201,6 @@ def setup_logging(log_file_dir: Path):
             "disable_existing_loggers": True,
         }
     )
-
-
-_thread_local = threading.local()
-
-
-def set_thread_logger(logger: logging.LoggerAdapter):
-    global _thread_local
-    setattr(_thread_local, "logger", logger)
-
-
-def get_thread_logger() -> logging.LoggerAdapter:
-    global _thread_local
-    if hasattr(_thread_local, "logger"):
-        return getattr(_thread_local, "logger")
-    raise LoggerNotFoundException("Logger not found")
-
-
-def clear_thread_logger():
-    global _thread_local
-    if hasattr(_thread_local, "logger"):
-        delattr(_thread_local, "logger")
 
 
 def init_statistic() -> RunStatistic:
@@ -207,10 +219,3 @@ def init_statistic() -> RunStatistic:
 
 
 run_statistic: RunStatistic = init_statistic()
-
-exit_flag: bool = False
-
-
-def set_exit_flag():
-    global exit_flag
-    exit_flag = True

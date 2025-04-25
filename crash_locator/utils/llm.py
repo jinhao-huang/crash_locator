@@ -1,9 +1,9 @@
-from openai import OpenAI
-from crash_locator.config import Config, get_thread_logger
+from openai import AsyncOpenAI
+from crash_locator.config import Config
 from openai import RateLimitError, InternalServerError
 from crash_locator.my_types import ReportInfo, Candidate, RunStatistic
 from crash_locator.prompt import Prompt
-from crash_locator.exceptions import UnExpectedResponseException, TaskCancelledException
+from crash_locator.exceptions import UnExpectedResponseException
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 from openai.types.chat.chat_completion_message_param import (
     ChatCompletionMessageParam,
@@ -11,7 +11,7 @@ from openai.types.chat.chat_completion_message_param import (
     ChatCompletionUserMessageParam,
     ChatCompletionAssistantMessageParam,
 )
-from crash_locator.config import run_statistic, exit_flag
+from crash_locator.config import run_statistic
 from typing import Callable
 import json
 from pathlib import Path
@@ -25,10 +25,11 @@ from tenacity import (
     after_log,
 )
 import logging
+import asyncio
 
-logger = get_thread_logger()
+logger = logging.getLogger(__name__)
 
-client = OpenAI(base_url=Config.OPENAI_BASE_URL, api_key=Config.OPENAI_API_KEY)
+client = AsyncOpenAI(base_url=Config.OPENAI_BASE_URL, api_key=Config.OPENAI_API_KEY)
 
 
 def _purge_conversation(conversation: list[ChatCompletionMessageParam]):
@@ -51,26 +52,23 @@ def _purge_conversation(conversation: list[ChatCompletionMessageParam]):
     after=after_log(logger, logging.WARNING),
     reraise=True,
 )
-def _query_llm(messages: list[ChatCompletionMessageParam]):
+async def _query_llm(messages: list[ChatCompletionMessageParam]):
     conversation = _purge_conversation(messages)
     logger.info("Preparing to query LLM")
     logger.debug(f"Messages: {conversation}")
 
-    response = client.chat.completions.create(
+    collected_chunks: list[ChatCompletionChunk] = []
+    collected_content: list[str | None] = []
+    collected_reasoning_content: list[str | None] = []
+
+    response = await client.chat.completions.create(
         model=Config.OPENAI_MODEL,
         messages=conversation,
         timeout=240,
         stream=True,
     )
 
-    collected_chunks: list[ChatCompletionChunk] = []
-    collected_content: list[str | None] = []
-    collected_reasoning_content: list[str | None] = []
-
-    for chunk in response:
-        if exit_flag:
-            raise TaskCancelledException("Task cancelled")
-
+    async for chunk in response:
         logger.debug(f"Received chunk: {chunk}")
         collected_chunks.append(chunk)
 
@@ -105,7 +103,7 @@ def _query_llm(messages: list[ChatCompletionMessageParam]):
     return conversation
 
 
-def _query_llm_with_retry(
+async def _query_llm_with_retry(
     messages: list[ChatCompletionMessageParam],
     retry_times: int,
     validate_func: Callable[[str], bool],
@@ -114,7 +112,7 @@ def _query_llm_with_retry(
 
     for times in range(retry_times):
         logger.info(f"Retry {times + 1} / {retry_times}")
-        conversation = _query_llm(messages)
+        conversation = await _query_llm(messages)
         content = conversation[-1]["content"]
 
         if validate_func(content):
@@ -154,7 +152,7 @@ def _save_retained_candidates(candidates: list[Candidate], dir: Path):
         )
 
 
-def query_filter_candidate(report_info: ReportInfo) -> list[Candidate]:
+async def query_filter_candidate(report_info: ReportInfo) -> list[Candidate]:
     logger.info(f"Starting candidate filtering for {report_info.apk_name}")
 
     messages = [
@@ -181,7 +179,7 @@ def query_filter_candidate(report_info: ReportInfo) -> list[Candidate]:
             )
         )
         # TODO: only add the necessary candidate to the context
-        messages = _query_llm_with_retry(
+        messages = await _query_llm_with_retry(
             messages,
             3,
             lambda x: ("Yes" in x and "No" not in x) or ("No" in x and "Yes" not in x),

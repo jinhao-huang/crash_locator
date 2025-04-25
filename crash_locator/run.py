@@ -1,13 +1,10 @@
 import shutil
 from pathlib import Path
-import concurrent.futures
+import asyncio
 from crash_locator.config import (
     Config,
     setup_logging,
-    set_thread_logger,
-    clear_thread_logger,
     run_statistic,
-    set_exit_flag,
 )
 from crash_locator.my_types import (
     ReportInfo,
@@ -17,14 +14,12 @@ from crash_locator.my_types import (
     SkippedReportInfo,
     FailedReportInfo,
 )
-from crash_locator.exceptions import TaskCancelledException
 from tqdm import tqdm
-from tqdm.contrib.logging import logging_redirect_tqdm
 import logging
 import json
 import traceback
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 
 def _is_buggy_method_filtered(
@@ -68,16 +63,16 @@ def _get_work_list() -> list[Path]:
     return work_list
 
 
-def _copy_report(report_name: str, task_logger: logging.LoggerAdapter):
+def _copy_report(report_name: str):
     target_dir = Config.RESULT_REPORT_DIR(report_name)
     target_dir.mkdir(parents=True, exist_ok=True)
 
     crash_report = Config.CRASH_REPORT_PATH(report_name)
-    task_logger.info(f"Copy `{crash_report}` of {report_name} to {target_dir}")
+    logger.info(f"Copy `{crash_report}` of {report_name} to {target_dir}")
     shutil.copy(crash_report, target_dir)
 
     report_info = Config.PRE_CHECK_REPORT_INFO_PATH(report_name)
-    task_logger.info(f"Copy `{report_info}` of {report_name} to {target_dir}")
+    logger.info(f"Copy `{report_info}` of {report_name} to {target_dir}")
     shutil.copy(report_info, target_dir)
 
 
@@ -86,51 +81,60 @@ class TaskAdapter(logging.LoggerAdapter):
         return f"[Task {self.extra['task_name']}] {msg}", kwargs
 
 
-def _process_report(
-    pre_check_report_dir: Path, statistic: RunStatistic, task_name: str
+async def _process_report(
+    pre_check_report_dir: Path,
+    statistic: RunStatistic,
+    task_name: str,
+    semaphore: asyncio.Semaphore,
 ):
-    task_logger = TaskAdapter(logger, {"task_name": task_name})
-    set_thread_logger(task_logger)
-
     from crash_locator.utils.llm import query_filter_candidate
 
-    try:
+    async with semaphore:
         report_name = pre_check_report_dir.name
-        task_logger.info(f"Processing report {report_name}")
-        task_logger.debug(f"Report path: {pre_check_report_dir}")
+        logger.info(f"Processing report {report_name}")
+        logger.debug(f"Report path: {pre_check_report_dir}")
 
         with open(Config.PRE_CHECK_REPORT_INFO_PATH(report_name), "r") as f:
             report_info = ReportInfo(**json.load(f))
 
         if len(report_info.candidates) == 1:
-            task_logger.info(f"Report {report_name} has only one candidate, skip it")
+            logger.info(f"Report {report_name} has only one candidate, skip it")
             statistic.add_report(report_name, SkippedReportInfo())
             return
 
-        _copy_report(report_name, task_logger)
+        _copy_report(report_name)
 
-        retained_candidates = query_filter_candidate(report_info)
+        try:
+            retained_candidates = await query_filter_candidate(report_info)
 
-        statistic.add_report(
-            report_name,
-            ProcessedReportInfo(
-                total_candidates_count=len(report_info.candidates),
-                retained_candidates_count=len(retained_candidates),
-                is_buggy_method_filtered=_is_buggy_method_filtered(
-                    report_info, retained_candidates
+        except asyncio.CancelledError:
+            logger.info(f"Task {task_name} cancelled")
+            raise
+        except Exception as e:
+            logger.critical(f"Error processing report: {e}")
+            logger.critical(f"{traceback.format_exc()}")
+            statistic.add_report(
+                task_name,
+                FailedReportInfo(
+                    exception_type=e.__class__.__name__,
+                    error_message=str(e),
                 ),
-            ),
-        )
-        task_logger.info(f"Finished processing report {report_name}")
-        return
-    except TaskCancelledException:
-        task_logger.info(f"Task {task_name} cancelled")
-        return
-    finally:
-        clear_thread_logger()
+            )
+        else:
+            statistic.add_report(
+                report_name,
+                ProcessedReportInfo(
+                    total_candidates_count=len(report_info.candidates),
+                    retained_candidates_count=len(retained_candidates),
+                    is_buggy_method_filtered=_is_buggy_method_filtered(
+                        report_info, retained_candidates
+                    ),
+                ),
+            )
+            logger.info(f"Finished processing report {report_name}")
 
 
-def run():
+async def run():
     setup_logging(Config.RESULT_DIR)
     logger.info("Start processing reports")
     logger.info(f"Maximum worker threads: {Config.MAX_WORKERS}")
@@ -138,39 +142,23 @@ def run():
     work_list = _get_work_list()
     logger.info(f"Found {len(work_list)} reports to process")
 
+    semaphore = asyncio.Semaphore(Config.MAX_WORKERS)
+    tasks: list[asyncio.Task] = []
+    for report_dir in work_list:
+        tasks.append(
+            asyncio.create_task(
+                _process_report(report_dir, run_statistic, report_dir.name, semaphore),
+                name=report_dir.name,
+            )
+        )
+
     try:
-        with logging_redirect_tqdm():
-            with concurrent.futures.ThreadPoolExecutor(
-                max_workers=Config.MAX_WORKERS
-            ) as executor:
-                future_to_report = {
-                    executor.submit(
-                        _process_report, report_dir, run_statistic, report_dir.name
-                    ): report_dir.name
-                    for report_dir in work_list
-                }
-
-                for future in tqdm(
-                    concurrent.futures.as_completed(future_to_report),
-                    total=len(future_to_report),
-                    desc="Processing reports",
-                ):
-                    report_name = future_to_report[future]
-                    try:
-                        future.result()
-                    except Exception as e:
-                        logger.critical(f"Error processing report: {e}")
-                        logger.critical(f"{traceback.format_exc()}")
-                        run_statistic.add_report(
-                            report_name,
-                            FailedReportInfo(
-                                exception_type=e.__class__.__name__,
-                                error_message=str(e),
-                            ),
-                        )
-
+        for task in tqdm(
+            asyncio.as_completed(tasks), total=len(tasks), desc="Processing reports"
+        ):
+            await task
         logger.info(f"Statistic: {run_statistic}")
-    except KeyboardInterrupt:
-        logger.info("Received KeyboardInterrupt, program will exit")
-        set_exit_flag()
-        executor.shutdown(wait=True, cancel_futures=True)
+    except asyncio.CancelledError:
+        logger.info("Received CancelledError signal, program will exit")
+        for task in tasks:
+            task.cancel()
