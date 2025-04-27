@@ -7,6 +7,7 @@ import asyncio
 import logging
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from cachier import set_default_params
 
 
 class Config(BaseSettings):
@@ -19,6 +20,10 @@ class Config(BaseSettings):
     @property
     def data_dir(self) -> Path:
         return self.root_dir / "Data"
+
+    @property
+    def cache_dir(self) -> Path:
+        return self.data_dir / "cache"
 
     openai_base_url: str
     openai_api_key: str
@@ -93,44 +98,10 @@ class Config(BaseSettings):
     def apk_cg_path(self, apk_name: str) -> Path:
         return self.resources_dir / "apk_cg" / apk_name / f"{apk_name}_cg.txt"
 
-    def android_cg_called_cache_path(self, v: str, hashed_signature: str) -> Path:
-        return (
-            self.resources_dir
-            / "cg_cache"
-            / "android_cg_called_cache"
-            / f"android_{v}"
-            / f"{hashed_signature}.json"
-        )
-
-    def android_cg_caller_cache_path(self, v: str, hashed_signature: str) -> Path:
-        return (
-            self.resources_dir
-            / "cg_cache"
-            / "android_cg_caller_cache"
-            / f"android_{v}"
-            / f"{hashed_signature}.json"
-        )
-
-    def apk_cg_called_cache_path(self, apk_name: str, hashed_signature: str) -> Path:
-        return (
-            self.resources_dir
-            / "cg_cache"
-            / "apk_cg_called_cache"
-            / apk_name
-            / f"{hashed_signature}.json"
-        )
-
-    def apk_cg_caller_cache_path(self, apk_name: str, hashed_signature: str) -> Path:
-        return (
-            self.resources_dir
-            / "cg_cache"
-            / "apk_cg_caller_cache"
-            / apk_name
-            / f"{hashed_signature}.json"
-        )
-
 
 config = Config()
+
+set_default_params(cache_dir=config.cache_dir, separate_files=True)
 
 
 # Custom filter to add task name to log records
