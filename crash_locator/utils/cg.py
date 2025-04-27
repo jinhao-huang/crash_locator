@@ -1,18 +1,17 @@
-def get_cg_file_path(signature, apk_name, android_version):
-    from crash_locator.config import config
+from crash_locator.config import config
 
-    APK_CG_PATH = config.apk_cg_path
-    ANDROID_CG_PATH = config.android_cg_path
+
+def get_cg_file_path(signature, apk_name, android_version):
     from .helper import get_method_type, MethodType
 
     method_type = get_method_type(signature)
     if method_type == MethodType.ANDROID:
-        file_path = ANDROID_CG_PATH(android_version)
+        file_path = config.android_cg_path(android_version)
     elif (
         method_type == MethodType.ANDROID_SUPPORT
         or method_type == MethodType.APPLICATION
     ):
-        file_path = APK_CG_PATH(apk_name)
+        file_path = config.apk_cg_path(apk_name)
     elif method_type == MethodType.JAVA:
         raise ValueError("Java method signature is not supported")
     else:
@@ -22,13 +21,6 @@ def get_cg_file_path(signature, apk_name, android_version):
 
 
 def get_cache_cg_file_path(signature, apk_name, android_version, called):
-    from crash_locator.config import config
-
-    ANDROID_CG_CALLED_CACHE_PATH = config.android_cg_called_cache_path
-    ANDROID_CG_CALLER_CACHE_PATH = config.android_cg_caller_cache_path
-    APK_CG_CALLED_CACHE_PATH = config.apk_cg_called_cache_path
-    APK_CG_CALLER_CACHE_PATH = config.apk_cg_caller_cache_path
-
     from .helper import get_method_type, MethodType
     import hashlib
 
@@ -38,17 +30,21 @@ def get_cache_cg_file_path(signature, apk_name, android_version, called):
         if android_version == "support":
             raise ValueError("Android support version is not supported")
         if called:
-            file_path = ANDROID_CG_CALLED_CACHE_PATH(android_version, hashed_signature)
+            file_path = config.android_cg_called_cache_path(
+                android_version, hashed_signature
+            )
         else:
-            file_path = ANDROID_CG_CALLER_CACHE_PATH(android_version, hashed_signature)
+            file_path = config.android_cg_caller_cache_path(
+                android_version, hashed_signature
+            )
     elif (
         method_type == MethodType.ANDROID_SUPPORT
         or method_type == MethodType.APPLICATION
     ):
         if called:
-            file_path = APK_CG_CALLED_CACHE_PATH(apk_name, hashed_signature)
+            file_path = config.apk_cg_called_cache_path(apk_name, hashed_signature)
         else:
-            file_path = APK_CG_CALLER_CACHE_PATH(apk_name, hashed_signature)
+            file_path = config.apk_cg_caller_cache_path(apk_name, hashed_signature)
     elif method_type == MethodType.JAVA:
         raise ValueError("Java method signature is not supported")
     else:
