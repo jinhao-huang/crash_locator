@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "beartype>=0.20.2",
+    "cachier>=3.1.2",
     "dotenv>=0.9.9",
     "openai>=1.75.0",
     "pydantic>=2.11.3",
