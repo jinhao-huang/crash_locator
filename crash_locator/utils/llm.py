@@ -1,5 +1,5 @@
 from openai import AsyncOpenAI
-from crash_locator.config import Config
+from crash_locator.config import config
 from openai import RateLimitError, InternalServerError
 from crash_locator.my_types import ReportInfo, Candidate, RunStatistic
 from crash_locator.prompt import Prompt
@@ -29,7 +29,7 @@ import asyncio
 
 logger = logging.getLogger(__name__)
 
-client = AsyncOpenAI(base_url=Config.OPENAI_BASE_URL, api_key=Config.OPENAI_API_KEY)
+client = AsyncOpenAI(base_url=config.openai_base_url, api_key=config.openai_api_key)
 
 
 def _purge_conversation(conversation: list[ChatCompletionMessageParam]):
@@ -62,7 +62,7 @@ async def _query_llm(messages: list[ChatCompletionMessageParam]):
     collected_reasoning_content: list[str | None] = []
 
     response = await client.chat.completions.create(
-        model=Config.OPENAI_MODEL,
+        model=config.openai_model,
         messages=conversation,
         timeout=240,
         stream=True,
@@ -187,10 +187,10 @@ async def query_filter_candidate(report_info: ReportInfo) -> list[Candidate]:
         if "Yes" in messages[-1]["content"]:
             retained_candidates.append(candidate)
 
-    _save_conversation(messages, Config.RESULT_REPORT_FILTER_DIR(report_info.apk_name))
+    _save_conversation(messages, config.result_report_filter_dir(report_info.apk_name))
     _save_retained_candidates(
         retained_candidates,
-        Config.RESULT_REPORT_FILTER_DIR(report_info.apk_name),
+        config.result_report_filter_dir(report_info.apk_name),
     )
     logger.info(
         f"Candidate filtering completed, before: {len(report_info.candidates)}, after: {len(retained_candidates)}"

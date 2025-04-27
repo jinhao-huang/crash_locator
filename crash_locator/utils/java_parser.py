@@ -2,7 +2,7 @@ from tree_sitter import Language, Parser, Node
 from typing import Callable
 import tree_sitter_java
 from pathlib import Path
-from crash_locator.config import Config
+from crash_locator.config import config
 from crash_locator.my_types import MethodSignature
 from crash_locator.exceptions import (
     MultipleMethodsCodeError,
@@ -16,6 +16,8 @@ import logging
 JAVA_LANGUAGE = Language(tree_sitter_java.language())
 parser = Parser(JAVA_LANGUAGE)
 
+logger = logging.getLogger(__name__)
+
 
 def get_application_code(
     apk_name: str,
@@ -27,10 +29,11 @@ def get_application_code(
         NoMethodFoundCodeError: No method found in the file.
         MultipleMethodsCodeError: Multiple methods found in the file.
     """
-    application_code_path = Config.APPLICATION_CODE_PATH(apk_name)
-    return _get_method_code_in_file(
-        application_code_path / method_signature.into_path(), method_signature
+    application_code_path = (
+        config.application_code_path(apk_name) / method_signature.into_path()
     )
+    logger.debug(f"Application code path: {application_code_path}")
+    return _get_method_code_in_file(application_code_path, method_signature)
 
 
 def _get_method_code_in_file(

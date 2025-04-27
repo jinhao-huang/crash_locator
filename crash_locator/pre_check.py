@@ -1,5 +1,5 @@
 import logging
-from crash_locator.config import Config, setup_logging
+from crash_locator.config import config, setup_logging
 from crash_locator.my_types import ReportInfo, CandidateReason
 from crash_locator.my_types import (
     KeyVarTerminalReason,
@@ -391,31 +391,31 @@ def _failed_statistic(
 
 
 def _save_report(report_name: str, report_info: ReportInfo) -> None:
-    pre_check_report_dir = Config.PRE_CHECK_REPORTS_DIR / report_name
+    pre_check_report_dir = config.pre_check_reports_dir / report_name
     pre_check_report_dir.mkdir(parents=True, exist_ok=True)
 
-    shutil.copy(Config.CRASH_REPORT_PATH(report_name), pre_check_report_dir)
+    shutil.copy(config.crash_report_path(report_name), pre_check_report_dir)
 
-    with open(Config.PRE_CHECK_REPORT_INFO_PATH(report_name), "w") as f:
+    with open(config.pre_check_report_info_path(report_name), "w") as f:
         f.write(report_info.model_dump_json(indent=4))
 
 
 def main():
-    setup_logging(Config.PRE_CHECK_DIR)
+    setup_logging(config.pre_check_dir)
 
     statistic = PreCheckStatistic()
-    work_list = Config.CRASH_REPORTS_DIR.iterdir()
-    if Config.DEBUG:
+    work_list = config.crash_reports_dir.iterdir()
+    if config.debug:
         work_list = [
             report_dir
             for report_dir in work_list
-            if report_dir.name in Config.DEBUG_CRASH_REPORTS
+            if report_dir.name in config.debug_crash_reports
         ]
 
     with logging_redirect_tqdm():
         for crash_report_dir in tqdm(list(work_list)):
             report_name = crash_report_dir.name
-            crash_report_path = Config.CRASH_REPORT_PATH(report_name)
+            crash_report_path = config.crash_report_path(report_name)
             if not crash_report_path.exists():
                 logger.error(f"The directory {crash_report_dir} is not a crash report")
                 continue
@@ -442,7 +442,7 @@ def main():
                 _save_report(report_name, report_info)
                 _successful_statistic(report_info, statistic)
 
-    with open(Config.PRE_CHECK_STATISTIC_PATH, "w") as f:
+    with open(config.pre_check_statistic_path, "w") as f:
         logger.info(f"Pre-check statistic: {statistic}")
         f.write(statistic.model_dump_json(indent=4))
 

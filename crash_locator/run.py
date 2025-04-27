@@ -2,7 +2,7 @@ import shutil
 from pathlib import Path
 import asyncio
 from crash_locator.config import (
-    Config,
+    config,
     setup_logging,
     run_statistic,
 )
@@ -32,24 +32,24 @@ def _is_buggy_method_filtered(
 
 
 def _get_work_list() -> list[Path]:
-    logger.info(f"Process all reports in {Config.PRE_CHECK_REPORTS_DIR}")
+    logger.info(f"Process all reports in {config.pre_check_reports_dir}")
     work_list = []
-    for report_dir in Config.PRE_CHECK_REPORTS_DIR.iterdir():
+    for report_dir in config.pre_check_reports_dir.iterdir():
         if not report_dir.is_dir():
             continue
 
         report_name = report_dir.name
-        report_info_path = Config.PRE_CHECK_REPORT_INFO_PATH(report_name)
+        report_info_path = config.pre_check_report_info_path(report_name)
         if not report_info_path.exists():
             continue
 
-        if Config.DEBUG and report_name not in Config.DEBUG_PRE_CHECK_REPORTS:
+        if config.debug and report_name not in config.debug_pre_check_reports:
             continue
 
         if report_name in run_statistic.finished_reports_detail:
             finished_report = run_statistic.finished_reports_detail[report_name]
             if (not isinstance(finished_report, FailedReportInfo)) or (
-                Config.RETRY_FAILED_REPORTS is False
+                config.retry_failed_reports is False
             ):
                 continue
             else:
@@ -64,14 +64,14 @@ def _get_work_list() -> list[Path]:
 
 
 def _copy_report(report_name: str):
-    target_dir = Config.RESULT_REPORT_DIR(report_name)
+    target_dir = config.result_report_dir(report_name)
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    crash_report = Config.CRASH_REPORT_PATH(report_name)
+    crash_report = config.crash_report_path(report_name)
     logger.info(f"Copy `{crash_report}` of {report_name} to {target_dir}")
     shutil.copy(crash_report, target_dir)
 
-    report_info = Config.PRE_CHECK_REPORT_INFO_PATH(report_name)
+    report_info = config.pre_check_report_info_path(report_name)
     logger.info(f"Copy `{report_info}` of {report_name} to {target_dir}")
     shutil.copy(report_info, target_dir)
 
@@ -94,7 +94,7 @@ async def _process_report(
         logger.info(f"Processing report {report_name}")
         logger.debug(f"Report path: {pre_check_report_dir}")
 
-        with open(Config.PRE_CHECK_REPORT_INFO_PATH(report_name), "r") as f:
+        with open(config.pre_check_report_info_path(report_name), "r") as f:
             report_info = ReportInfo(**json.load(f))
 
         if len(report_info.candidates) == 1:
@@ -135,14 +135,14 @@ async def _process_report(
 
 
 async def run():
-    setup_logging(Config.RESULT_DIR)
+    setup_logging(config.result_dir)
     logger.info("Start processing reports")
-    logger.info(f"Maximum worker threads: {Config.MAX_WORKERS}")
+    logger.info(f"Maximum worker threads: {config.max_workers}")
 
     work_list = _get_work_list()
     logger.info(f"Found {len(work_list)} reports to process")
 
-    semaphore = asyncio.Semaphore(Config.MAX_WORKERS)
+    semaphore = asyncio.Semaphore(config.max_workers)
     tasks: list[asyncio.Task] = []
     for report_dir in work_list:
         tasks.append(

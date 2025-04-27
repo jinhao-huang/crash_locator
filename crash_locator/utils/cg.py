@@ -1,8 +1,8 @@
 def get_cg_file_path(signature, apk_name, android_version):
-    from crash_locator.config import Config
+    from crash_locator.config import config
 
-    APK_CG_PATH = Config.APK_CG_PATH
-    ANDROID_CG_PATH = Config.ANDROID_CG_PATH
+    APK_CG_PATH = config.apk_cg_path
+    ANDROID_CG_PATH = config.android_cg_path
     from .helper import get_method_type, MethodType
 
     method_type = get_method_type(signature)
@@ -22,12 +22,12 @@ def get_cg_file_path(signature, apk_name, android_version):
 
 
 def get_cache_cg_file_path(signature, apk_name, android_version, called):
-    from crash_locator.config import Config
+    from crash_locator.config import config
 
-    ANDROID_CG_CALLED_CACHE_PATH = Config.ANDROID_CG_CALLED_CACHE_PATH
-    ANDROID_CG_CALLER_CACHE_PATH = Config.ANDROID_CG_CALLER_CACHE_PATH
-    APK_CG_CALLED_CACHE_PATH = Config.APK_CG_CALLED_CACHE_PATH
-    APK_CG_CALLER_CACHE_PATH = Config.APK_CG_CALLER_CACHE_PATH
+    ANDROID_CG_CALLED_CACHE_PATH = config.android_cg_called_cache_path
+    ANDROID_CG_CALLER_CACHE_PATH = config.android_cg_caller_cache_path
+    APK_CG_CALLED_CACHE_PATH = config.apk_cg_called_cache_path
+    APK_CG_CALLER_CACHE_PATH = config.apk_cg_caller_cache_path
 
     from .helper import get_method_type, MethodType
     import hashlib

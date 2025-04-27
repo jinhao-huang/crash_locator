@@ -1,116 +1,136 @@
 from pathlib import Path
-import os
 import json
-from dotenv import load_dotenv
 from datetime import datetime
 import logging.config
 from crash_locator.my_types import RunStatistic
 import asyncio
 import logging
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-load_dotenv(override=True)
 
+class Config(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="crash_locator_", env_file=".env", cli_parse_args=True
+    )
 
-class Config:
-    ROOT_DIR: Path = Path.cwd()
-    DATA_DIR: Path = ROOT_DIR / "Data"
+    root_dir: Path = Path(__file__).parent.parent
 
-    OPENAI_BASE_URL: str = os.environ.get("OPENAI_BASE_URL")
-    OPENAI_API_KEY: str = os.environ.get("OPENAI_API_KEY")
-    OPENAI_MODEL: str = os.environ.get("OPENAI_MODEL")
+    @property
+    def data_dir(self) -> Path:
+        return self.root_dir / "Data"
 
-    # Crash reports directory
-    CRASH_REPORTS_DIR: Path = DATA_DIR / "crash_reports" / "all-0119"
-
-    @staticmethod
-    def CRASH_REPORT_PATH(report_name: str) -> Path:
-        return Config.CRASH_REPORTS_DIR / report_name / f"{report_name}.json"
+    openai_base_url: str
+    openai_api_key: str
+    openai_model: str
 
     # Pre_check directory
-    PRE_CHECK_DIR: Path = DATA_DIR / "pre_check"
-    PRE_CHECK_STATISTIC_PATH: Path = PRE_CHECK_DIR / "statistic.json"
+    @property
+    def pre_check_dir(self) -> Path:
+        return self.data_dir / "pre_check"
 
-    PRE_CHECK_REPORTS_DIR: Path = PRE_CHECK_DIR / "reports"
+    @property
+    def pre_check_statistic_path(self) -> Path:
+        return self.pre_check_dir / "statistic.json"
 
-    @staticmethod
-    def PRE_CHECK_REPORT_INFO_PATH(report_name: str) -> Path:
-        return Config.PRE_CHECK_REPORTS_DIR / report_name / "report_info.json"
+    @property
+    def pre_check_reports_dir(self) -> Path:
+        return self.pre_check_dir / "reports"
+
+    def pre_check_report_info_path(self, report_name: str) -> Path:
+        return self.pre_check_reports_dir / report_name / "report_info.json"
 
     # Result directory
-    RESULT_DIR: Path = DATA_DIR / "results" / "20250422"
-    RESULT_STATISTIC_PATH: Path = RESULT_DIR / "statistic.json"
-
-    @staticmethod
-    def RESULT_REPORT_DIR(report_name: str) -> Path:
-        return Config.RESULT_DIR / "reports" / report_name
-
-    @staticmethod
-    def RESULT_REPORT_FILTER_DIR(report_name: str) -> Path:
-        return Config.RESULT_REPORT_DIR(report_name) / "filter"
-
-    MAX_WORKERS: int = int(os.environ.get("MAX_WORKERS", "4"))
-    RETRY_FAILED_REPORTS: bool = True
-
-    DEBUG: bool = os.environ.get("DEBUG", "false").lower() == "true"
-    DEBUG_CRASH_REPORTS: list[str] = os.environ.get("DEBUG_CRASH_REPORTS", "").split(
-        ","
+    result_dir_name: str = Field(
+        default_factory=lambda: datetime.now().strftime("%Y%m%d")
     )
-    DEBUG_PRE_CHECK_REPORTS: list[str] = os.environ.get(
-        "DEBUG_PRE_CHECK_REPORTS", ""
-    ).split(",")
 
-    APPLICATION_CODE_DIR: Path = DATA_DIR / "application_source_code"
+    @property
+    def result_dir(self) -> Path:
+        return self.data_dir / "results" / self.result_dir_name
 
-    def APPLICATION_CODE_PATH(apk_name: str) -> Path:
-        return Config.APPLICATION_CODE_DIR / apk_name / "sources"
+    @property
+    def result_statistic_path(self) -> Path:
+        return self.result_dir / "statistic.json"
 
-    @staticmethod
-    def ANDROID_CG_PATH(v: str) -> Path:
-        return Config.DATA_DIR / "AndroidCG" / f"android{v}" / f"android{v}_cg.txt"
+    def result_report_dir(self, report_name: str) -> Path:
+        return self.result_dir / "reports" / report_name
 
-    @staticmethod
-    def APK_CG_PATH(apk_name: str) -> Path:
-        return Config.DATA_DIR / "ApkCG" / apk_name / f"{apk_name}_cg.txt"
+    def result_report_filter_dir(self, report_name: str) -> Path:
+        return self.result_report_dir(report_name) / "filter"
 
-    @staticmethod
-    def ANDROID_CG_CALLED_CACHE_PATH(v: str, hashed_signature: str) -> Path:
+    max_workers: int = 4
+    retry_failed_reports: bool = True
+
+    debug: bool = False
+    debug_crash_reports: list[str] = Field(default_factory=list)
+    debug_pre_check_reports: list[str] = Field(default_factory=list)
+
+    resources_dir_name: str = "resources"
+
+    @property
+    def resources_dir(self) -> Path:
+        return self.data_dir / self.resources_dir_name
+
+    # Crash reports directory
+    @property
+    def crash_reports_dir(self) -> Path:
+        return self.resources_dir / "crash_reports" / "all-0119"
+
+    def crash_report_path(self, report_name: str) -> Path:
+        return self.crash_reports_dir / report_name / f"{report_name}.json"
+
+    @property
+    def application_code_dir(self) -> Path:
+        return self.resources_dir / "application_source_code"
+
+    def application_code_path(self, apk_name: str) -> Path:
+        return self.application_code_dir / apk_name / "sources"
+
+    def android_cg_path(self, v: str) -> Path:
+        return self.resources_dir / "android_cg" / f"android{v}" / f"android{v}_cg.txt"
+
+    def apk_cg_path(self, apk_name: str) -> Path:
+        return self.resources_dir / "apk_cg" / apk_name / f"{apk_name}_cg.txt"
+
+    def android_cg_called_cache_path(self, v: str, hashed_signature: str) -> Path:
         return (
-            Config.DATA_DIR
-            / "CgCache"
-            / "AndroidCG_called_cache"
+            self.resources_dir
+            / "cg_cache"
+            / "android_cg_called_cache"
             / f"android_{v}"
             / f"{hashed_signature}.json"
         )
 
-    @staticmethod
-    def ANDROID_CG_CALLER_CACHE_PATH(v: str, hashed_signature: str) -> Path:
+    def android_cg_caller_cache_path(self, v: str, hashed_signature: str) -> Path:
         return (
-            Config.DATA_DIR
-            / "CgCache"
-            / "AndroidCG_caller_cache"
+            self.resources_dir
+            / "cg_cache"
+            / "android_cg_caller_cache"
             / f"android_{v}"
             / f"{hashed_signature}.json"
         )
 
-    @staticmethod
-    def APK_CG_CALLED_CACHE_PATH(apk_name: str, hashed_signature: str) -> Path:
+    def apk_cg_called_cache_path(self, apk_name: str, hashed_signature: str) -> Path:
         return (
-            Config.DATA_DIR
-            / "CgCache"
-            / "ApkCG_called_cache"
+            self.resources_dir
+            / "cg_cache"
+            / "apk_cg_called_cache"
             / apk_name
             / f"{hashed_signature}.json"
         )
 
-    @staticmethod
-    def APK_CG_CALLER_CACHE_PATH(apk_name: str, hashed_signature: str) -> Path:
+    def apk_cg_caller_cache_path(self, apk_name: str, hashed_signature: str) -> Path:
         return (
-            Config.DATA_DIR
-            / "CgCache"
-            / "ApkCG_caller_cache"
+            self.resources_dir
+            / "cg_cache"
+            / "apk_cg_caller_cache"
             / apk_name
             / f"{hashed_signature}.json"
         )
+
+
+config = Config()
 
 
 # Custom filter to add task name to log records
@@ -204,18 +224,21 @@ def setup_logging(log_file_dir: Path):
 
 
 def init_statistic() -> RunStatistic:
-    if Config.RESULT_STATISTIC_PATH.exists():
-        with open(Config.RESULT_STATISTIC_PATH, "r") as f:
+    if config.result_statistic_path.exists():
+        with open(config.result_statistic_path, "r") as f:
             run_statistic = RunStatistic(**json.load(f))
     else:
         run_statistic = RunStatistic(
             model_info=RunStatistic.ModelInfo(
-                model_name=Config.OPENAI_MODEL,
+                model_name=config.openai_model,
             ),
         )
-    run_statistic.set_path(Config.RESULT_STATISTIC_PATH)
+    run_statistic.set_path(config.result_statistic_path)
 
     return run_statistic
 
 
 run_statistic: RunStatistic = init_statistic()
+
+if __name__ == "__main__":
+    print(config.model_dump_json(indent=4))
