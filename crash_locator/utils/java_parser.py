@@ -3,7 +3,12 @@ from typing import Callable
 import tree_sitter_java
 from pathlib import Path
 from crash_locator.config import config
-from crash_locator.my_types import MethodSignature
+from crash_locator.my_types import (
+    MethodSignature,
+    PackageType,
+    Candidate,
+    ClassSignature,
+)
 from crash_locator.exceptions import (
     MultipleMethodsCodeError,
     NoMethodFoundCodeError,
@@ -21,25 +26,54 @@ logger = logging.getLogger(__name__)
 
 def get_application_code(
     apk_name: str,
-    method_signature: MethodSignature,
+    candidate: Candidate,
 ) -> str:
     """Get the application code for a given method signature.
+    Recursively search the method by the extend hierarchy.
 
     Raises:
+        ValueError: The code is not in the application code directory.
         NoMethodFoundCodeError: No method found in the file.
         MultipleMethodsCodeError: Multiple methods found in the file.
     """
-    application_code_path = (
-        config.application_code_dir(apk_name) / method_signature.into_path()
-    )
-    logger.debug(f"Application code path: {application_code_path}")
-    return _get_method_code_in_file(application_code_path, method_signature)
+    if len(candidate.extend_hierarchy) == 0:
+        extend_hierarchy = [
+            ClassSignature(
+                package_name=candidate.signature.package_name,
+                class_name=candidate.signature.class_name,
+                inner_class=candidate.signature.inner_class,
+            )
+        ]
+    else:
+        extend_hierarchy = candidate.extend_hierarchy
+
+    for class_signature in extend_hierarchy:
+        method_signature = MethodSignature(
+            package_name=class_signature.package_name,
+            class_name=class_signature.class_name,
+            inner_class=class_signature.inner_class,
+            method_name=candidate.signature.method_name,
+            parameters=candidate.signature.parameters,
+            return_type=candidate.signature.return_type,
+        )
+        if PackageType.get_package_type(method_signature) != PackageType.APPLICATION:
+            raise ValueError(f"The code is not in the application code directory.")
+        try:
+            return _get_method_code_in_file(
+                config.application_code_dir(apk_name) / method_signature.into_path(),
+                method_signature,
+            )
+        except NoMethodFoundCodeError:
+            continue
+
+    raise NoMethodFoundCodeError()
 
 
 def _get_method_code_in_file(
     file_path: Path,
     method_signature: MethodSignature,
 ) -> str:
+    logger.debug(f"Getting method code in file: {file_path}")
     method_name = method_signature.method_name
 
     if not file_path.exists():
@@ -177,10 +211,9 @@ def _anonymous_class_filter(
         if class_body is None:
             continue
         line_comment = get_child(class_body, "line_comment")
-        if (
-            line_comment is not None
-            and method_signature.full_class_name() in line_comment.text.decode("utf8")
-        ):
+        text = line_comment.text.decode("utf8") if line_comment else ""
+        full_class_name = method_signature.full_class_name()
+        if line_comment is not None and full_class_name in text:
             retained_methods.append(method)
 
     return retained_methods

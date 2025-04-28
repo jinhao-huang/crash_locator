@@ -259,7 +259,7 @@ class MethodSignature(BaseModel):
 
     def full_class_name(self) -> str:
         if self.inner_class:
-            return f"{self.class_name}.{self.inner_class.replace('$', '.')}"
+            return f"{self.class_name}{self.inner_class.replace('$', '.')}"
         else:
             return self.class_name
 

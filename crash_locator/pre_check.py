@@ -296,11 +296,13 @@ def _remove_useless_candidates(report: ReportInfo) -> None:
 
 
 def _check_candidate_code_exist(report: ReportInfo) -> None:
-    for candidate in report.candidates:
+    for candidate in report.candidates[:]:
         try:
-            get_application_code(report.apk_name, candidate.signature)
+            get_application_code(report.apk_name, candidate)
         except MethodCodeException:
             raise CandidateCodeNotFoundException(str(candidate.signature))
+        except ValueError:
+            report.candidates.remove(candidate)
 
 
 def pre_check(crash_report_path: Path) -> ReportInfo:
