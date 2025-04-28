@@ -30,7 +30,7 @@ def get_application_code(
         MultipleMethodsCodeError: Multiple methods found in the file.
     """
     application_code_path = (
-        config.application_code_path(apk_name) / method_signature.into_path()
+        config.application_code_dir(apk_name) / method_signature.into_path()
     )
     logger.debug(f"Application code path: {application_code_path}")
     return _get_method_code_in_file(application_code_path, method_signature)

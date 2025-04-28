@@ -78,19 +78,20 @@ class Config(BaseSettings):
         return self.data_dir / self.resources_dir_name
 
     # Crash reports directory
+    crash_reports_dir_name: str = "all-0427"
+
     @property
     def crash_reports_dir(self) -> Path:
-        return self.resources_dir / "crash_reports" / "all-0119"
+        return self.resources_dir / "crash_reports" / self.crash_reports_dir_name
 
     def crash_report_path(self, report_name: str) -> Path:
         return self.crash_reports_dir / report_name / f"{report_name}.json"
 
-    @property
-    def application_code_dir(self) -> Path:
-        return self.resources_dir / "application_source_code"
+    def android_code_dir(self, v: str) -> Path:
+        return self.resources_dir / "android_code" / f"android_{v}"
 
-    def application_code_path(self, apk_name: str) -> Path:
-        return self.application_code_dir / apk_name / "sources"
+    def application_code_dir(self, apk_name: str) -> Path:
+        return self.resources_dir / "application_code" / apk_name / "sources"
 
     def android_cg_path(self, v: str) -> Path:
         return self.resources_dir / "android_cg" / f"android{v}" / f"android{v}_cg.txt"
