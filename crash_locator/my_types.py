@@ -181,7 +181,7 @@ class ClassSignature(BaseModel):
             return cls(
                 package_name=package_name,
                 class_name=class_name,
-                inner_class=inner_class,
+                inner_class=inner_class.strip("$") if inner_class else None,
             )
         else:
             raise InvalidSignatureException(
@@ -258,10 +258,16 @@ class MethodSignature(BaseModel):
         return Path(self.package_name.replace(".", "/")) / f"{self.class_name}.java"
 
     def full_class_name(self) -> str:
+        class_name = f"{self.package_name}.{self.class_name}"
         if self.inner_class:
-            return f"{self.class_name}{self.inner_class.replace('$', '.')}"
-        else:
-            return self.class_name
+            class_name = f"{class_name}.{self.inner_class.replace('$', '.')}"
+        return class_name
+
+    def class_list(self) -> list[str]:
+        class_list = [self.class_name]
+        if self.inner_class:
+            class_list.extend(self.inner_class.split("$"))
+        return class_list
 
     def __str__(self) -> str:
         params = ", ".join(self.parameters) if self.parameters else ""

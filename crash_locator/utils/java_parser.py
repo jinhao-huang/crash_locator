@@ -196,13 +196,17 @@ def _methods_parameters_filter(
     return filtered_methods
 
 
+def _is_anonymous_class(method_signature: MethodSignature) -> bool:
+    return method_signature.class_list()[-1].isdigit()
+
+
 def _anonymous_class_filter(
     methods: list[Node], method_signature: MethodSignature
 ) -> list[Node]:
     inner_class = method_signature.inner_class
     if inner_class is None:
         return methods
-    if not inner_class.split("$")[-1].isdigit():
+    if not _is_anonymous_class(method_signature):
         return methods
 
     retained_methods = []
@@ -213,7 +217,8 @@ def _anonymous_class_filter(
         line_comment = get_child(class_body, "line_comment")
         text = line_comment.text.decode("utf8") if line_comment else ""
         full_class_name = method_signature.full_class_name()
-        if line_comment is not None and full_class_name in text:
+        full_class_text = f"// from class: {full_class_name}"
+        if line_comment is not None and text == full_class_text:
             retained_methods.append(method)
 
     return retained_methods
