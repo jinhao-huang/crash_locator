@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, PrivateAttr
 import re
 from crash_locator.exceptions import InvalidSignatureException
 from pathlib import Path
-from enum import StrEnum
+from enum import Enum, StrEnum
 from typing import Self
 
 
@@ -159,6 +159,37 @@ class RunStatistic(BaseModel):
     def set_path(self, path: Path):
         with self._lock:
             self._path = path
+
+
+class ClassSignature(BaseModel):
+    package_name: str
+    class_name: str
+    inner_class: str | None = None
+
+    @classmethod
+    def from_str(cls, class_signature: str) -> Self:
+        """
+        Example Class Signature:
+        1. android.view.ViewRoot
+        2. android.view.ViewRoot$checkThread
+        """
+        class_signature = class_signature.strip().strip("<>")
+        pattern = r"^(\S+)\.(\w+)(\$\S+)?$"
+        match = re.match(pattern, class_signature)
+        if match:
+            package_name, class_name, inner_class = match.groups()
+            return cls(
+                package_name=package_name,
+                class_name=class_name,
+                inner_class=inner_class,
+            )
+        else:
+            raise InvalidSignatureException(
+                f"Invalid class signature: {class_signature}"
+            )
+
+    def __str__(self) -> str:
+        return f"{self.package_name}.{self.class_name}{'.' + self.inner_class if self.inner_class else ''}"
 
 
 class MethodSignature(BaseModel):
@@ -407,6 +438,7 @@ The method is data related to the crash.
 class Candidate(BaseModel):
     name: str
     signature: MethodSignature
+    extend_hierarchy: list[ClassSignature]
     reasons: (
         KeyVarTerminalReason
         | KeyVarNonTerminalReason
@@ -455,3 +487,22 @@ class ReportInfo(BaseModel):
                 sorted_candidates.append(candidate)
 
         return sorted_candidates
+
+
+class PackageType(Enum):
+    JAVA = "java"
+    ANDROID = "android"
+    APPLICATION = "application"
+    ANDROID_SUPPORT = "android_support"
+
+    @staticmethod
+    def get_package_type(signature: MethodSignature | ClassSignature) -> "PackageType":
+        match signature.package_name:
+            case s if s.startswith("java"):
+                return PackageType.JAVA
+            case s if s.startswith("android.support"):
+                return PackageType.ANDROID_SUPPORT
+            case s if s.startswith("android") or s.startswith("com.android"):
+                return PackageType.ANDROID
+            case _:
+                return PackageType.APPLICATION

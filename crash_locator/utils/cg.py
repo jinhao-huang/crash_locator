@@ -1,19 +1,21 @@
 from crash_locator.config import config
 from cachier import cachier
 
+from crash_locator.my_types import PackageType
+
 
 def _get_cg_file_path(signature, apk_name, android_version):
-    from .helper import get_method_type, MethodType
+    from .helper import get_method_type
 
     method_type = get_method_type(signature)
-    if method_type == MethodType.ANDROID:
+    if method_type == PackageType.ANDROID:
         file_path = config.android_cg_path(android_version)
     elif (
-        method_type == MethodType.ANDROID_SUPPORT
-        or method_type == MethodType.APPLICATION
+        method_type == PackageType.ANDROID_SUPPORT
+        or method_type == PackageType.APPLICATION
     ):
         file_path = config.apk_cg_path(apk_name)
-    elif method_type == MethodType.JAVA:
+    elif method_type == PackageType.JAVA:
         raise ValueError("Java method signature is not supported")
     else:
         raise ValueError("Unknown method type")

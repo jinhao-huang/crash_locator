@@ -1,6 +1,11 @@
 import logging
 from crash_locator.config import config, setup_logging
-from crash_locator.my_types import ReportInfo, CandidateReason
+from crash_locator.my_types import (
+    PackageType,
+    ReportInfo,
+    CandidateReason,
+    ClassSignature,
+)
 from crash_locator.my_types import (
     KeyVarTerminalReason,
     KeyVarNonTerminalReason,
@@ -31,7 +36,7 @@ from crash_locator.my_types import (
     MethodSignature,
     ReasonTypeLiteral,
 )
-from crash_locator.utils.helper import get_method_type, MethodType
+from crash_locator.utils.helper import get_method_type
 from crash_locator.utils.java_parser import get_application_code
 
 logger = logging.getLogger()
@@ -161,15 +166,15 @@ def _get_and_check_framework_stack(
         zip(stack_trace, stack_trace_short_api)
     ):
         method_type = get_method_type(method)
-        if method_type == MethodType.ANDROID:
+        if method_type == PackageType.ANDROID:
             framework_trace.append(method)
             framework_short_trace.append(method_short_api)
-        elif method_type == MethodType.ANDROID_SUPPORT:
+        elif method_type == PackageType.ANDROID_SUPPORT:
             framework_trace.append(method)
             framework_short_trace.append(method_short_api)
-        elif method_type == MethodType.JAVA:
+        elif method_type == PackageType.JAVA:
             raise InvalidFrameworkStackException("Java method in framework stack trace")
-        elif method_type == MethodType.APPLICATION:
+        elif method_type == PackageType.APPLICATION:
             divider_index = index
             break
 
@@ -348,6 +353,10 @@ def pre_check(crash_report_path: Path) -> ReportInfo:
                 signature=MethodSignature.from_str(candidate["Candidate Signature"])
                 if candidate["Candidate Signature"] != ""
                 else MethodSignature.from_str(candidate["Candidate Name"]),
+                extend_hierarchy=[
+                    ClassSignature.from_str(extend_hierarchy)
+                    for extend_hierarchy in candidate["Extend Hierarchy"]
+                ],
                 reasons=_candidate_into_reason(
                     candidate, framework_entry_api, terminal_api
                 ),

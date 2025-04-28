@@ -1,11 +1,4 @@
-from enum import Enum
-
-
-class MethodType(Enum):
-    JAVA = "java"
-    ANDROID = "android"
-    APPLICATION = "application"
-    ANDROID_SUPPORT = "android_support"
+from crash_locator.my_types import PackageType
 
 
 def get_method_type(method_signature):
@@ -13,23 +6,18 @@ def get_method_type(method_signature):
 
     package_name, _, _, _, _, _ = parse_signature(method_signature)
     if package_name.startswith("java"):
-        return MethodType.JAVA
+        return PackageType.JAVA
     elif package_name.startswith("android.support"):
-        return MethodType.ANDROID_SUPPORT
+        return PackageType.ANDROID_SUPPORT
     elif package_name.startswith("android") or package_name.startswith("com.android"):
-        return MethodType.ANDROID
+        return PackageType.ANDROID
     else:
-        return MethodType.APPLICATION
+        return PackageType.APPLICATION
 
 
 def method_signature_into_path(method_signature):
     from .parser import parse_signature
 
     package_name, class_name, _, _, _, _ = parse_signature(method_signature)
-    path = (
-        package_name.replace(".", "/")
-        + "/"
-        + class_name
-        + ".java"
-    )
+    path = package_name.replace(".", "/") + "/" + class_name + ".java"
     return path
