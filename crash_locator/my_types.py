@@ -461,7 +461,7 @@ class Candidate(BaseModel):
 class ReportInfo(BaseModel):
     apk_name: str
     android_version: str
-    regression_message: str
+    target_sdk_version: int
     exception_type: str
     crash_message: str
     stack_trace: list[str]
@@ -470,9 +470,6 @@ class ReportInfo(BaseModel):
     framework_trace_short_api: list[str]
     framework_entry_api: str
     candidates: list[Candidate]
-    ets_related_type: str
-    related_variable_type: str
-    related_condition_type: str
     buggy_method: MethodSignature
 
     @property

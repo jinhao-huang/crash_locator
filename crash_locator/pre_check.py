@@ -24,6 +24,7 @@ from crash_locator.exceptions import (
     MethodCodeException,
     NoBuggyMethodCandidatesException,
     CandidateCodeNotFoundException,
+    NoTerminalAPIException,
 )
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
@@ -42,14 +43,46 @@ from crash_locator.utils.java_parser import get_application_code
 logger = logging.getLogger()
 
 
+def _get_android_version(report: dict) -> str:
+    if (
+        "Target Version of Framework"
+        in report["Fault Localization by CrashTracker"]["Exception Info"]
+    ):
+        return report["Fault Localization by CrashTracker"]["Exception Info"][
+            "Target Version of Framework"
+        ]
+    else:
+        match report["Crash Info in Dataset"]["Manifest targetSdkVersion"]:
+            case v if v <= 8:
+                return "2.2"
+            case v if v < 19:
+                return "2.3"
+            case v if v < 21:
+                return "4.4"
+            case v if v < 23:
+                return "5.0"
+            case v if v < 24:
+                return "6.0"
+            case v if v < 26:
+                return "7.0"
+            case v if v < 28:
+                return "8.0"
+            case v if v < 29:
+                return "9.0"
+            case v if v < 30:
+                return "10.0"
+            case v if v < 31:
+                return "11.0"
+            case _:
+                return "12.0"
+
+
 def report_completion(report):
     """
     Complete the full signature stack trace of report.
     """
     apk_name = report["Crash Info in Dataset"]["Apk name"]
-    android_version = report["Fault Localization by CrashTracker"]["Exception Info"][
-        "Target Version of Framework"
-    ]
+    android_version = _get_android_version(report)
     stack_trace = report["Crash Info in Dataset"]["stack trace signature"]
 
     def complete_self_invoke_trace(stack_trace, apk_name, android_version):
@@ -220,9 +253,7 @@ def _candidate_into_reason(
                     if method == terminal_api:
                         break
             else:
-                raise NotImplementedError(
-                    "Non-terminal key variable explanation is not implemented yet"
-                )
+                raise NoTerminalAPIException()
             return KeyVarNonTerminalReason(
                 framework_entry_api=framework_entry_api,
                 call_chain_to_terminal=call_chain_to_terminal,
@@ -312,7 +343,6 @@ def _check_candidate_code_exist(report: ReportInfo) -> None:
 def pre_check(crash_report_path: Path) -> ReportInfo:
     report = json.load(open(crash_report_path, "r"))
 
-    _check_exception_info_exist(report)
     report_completion(report)
 
     stack_trace = [
@@ -330,24 +360,11 @@ def pre_check(crash_report_path: Path) -> ReportInfo:
 
     report_info = ReportInfo(
         apk_name=report["Crash Info in Dataset"]["Apk name"],
-        android_version=report["Fault Localization by CrashTracker"]["Exception Info"][
-            "Target Version of Framework"
-        ],
-        regression_message=report["Fault Localization by CrashTracker"][
-            "Exception Info"
-        ]["Regression Message"],
+        android_version=_get_android_version(report),
+        target_sdk_version=report["Crash Info in Dataset"]["Manifest targetSdkVersion"],
         exception_type=report["Crash Info in Dataset"]["Exception Type"]
         .split(".")[-1]
         .split("$")[-1],
-        ets_related_type=report["Fault Localization by CrashTracker"]["Exception Info"][
-            "ETS-related Type"
-        ],
-        related_variable_type=report["Fault Localization by CrashTracker"][
-            "Exception Info"
-        ]["Related Variable Type"],
-        related_condition_type=report["Fault Localization by CrashTracker"][
-            "Exception Info"
-        ]["Related Condition Type"],
         stack_trace=stack_trace,
         stack_trace_short_api=stack_trace_short_api,
         framework_trace=framework_trace,

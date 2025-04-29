@@ -10,7 +10,7 @@ You will be given a crash report first, then you need to analyze the crash repor
 
 Then, we will give you a candidate method at a time, and you need to analyze whether the candidate method is related to the crash.
 
-For those candidate methods that are most likely to be related to the crash, you just reply "Yes"(Usually the numbers "Yes" is less than 3, so reply "Yes" as few as possible), otherwise you reply "No" without any additional text.
+For those candidate methods that are most likely to be related to the crash, you just reply "Yes"(Usually the numbers "Yes" is less than 3), otherwise you reply "No" without any additional text.
 """
 
     @staticmethod
@@ -39,7 +39,7 @@ Android Version:
 
     @staticmethod
     def FILTER_CANDIDATE_METHOD(report_info: ReportInfo, candidate: Candidate) -> str:
-        code = get_application_code(report_info.apk_name, candidate.signature)
+        code = get_application_code(report_info.apk_name, candidate)
         return f"""
 Candidate Method: {candidate.signature}
 

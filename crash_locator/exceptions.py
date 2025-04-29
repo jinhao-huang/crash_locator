@@ -34,6 +34,12 @@ class CandidateCodeNotFoundException(PreCheckException):
         super().__init__(self.message)
 
 
+class NoTerminalAPIException(PreCheckException):
+    def __init__(self, message="No terminal API found in the report"):
+        self.message = message
+        super().__init__(self.message)
+
+
 class MethodCodeException(Exception):
     def __init__(self, message="Method code cannot be retrieved"):
         self.message = message
