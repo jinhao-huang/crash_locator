@@ -296,6 +296,10 @@ def _remove_useless_candidates(report: ReportInfo) -> None:
 
 
 def _check_candidate_code_exist(report: ReportInfo) -> None:
+    """Check if the candidate code exist
+    If candidate code not exists in **application code directory**, the candidate will be removed.
+    if candidate code not found, raise CandidateCodeNotFoundException.
+    """
     for candidate in report.candidates[:]:
         try:
             get_application_code(report.apk_name, candidate)
