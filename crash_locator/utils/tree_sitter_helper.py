@@ -15,6 +15,18 @@ def get_parent(node: Node, parent_type: str) -> Node | None:
     return parent
 
 
+def find_ancestor_by_type(node: Node, ancestor_type: str) -> Node | None:
+    """Find the ancestor node of the given node with the given type.
+
+    Returns:
+        The ancestor node if found, otherwise None.
+    """
+    target = node.parent
+    while target is not None and target.type != ancestor_type:
+        target = target.parent
+    return target
+
+
 def get_child(node: Node, child_type: str) -> Node | None:
     """Get the child node of the given node with the given type.
 

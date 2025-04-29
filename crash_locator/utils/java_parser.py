@@ -15,7 +15,12 @@ from crash_locator.exceptions import (
     MethodFileNotFoundException,
     UnknownException,
 )
-from crash_locator.utils.tree_sitter_helper import get_parent, get_child, get_type_child
+from crash_locator.utils.tree_sitter_helper import (
+    get_parent,
+    get_child,
+    get_type_child,
+    find_ancestor_by_type,
+)
 import logging
 
 JAVA_LANGUAGE = Language(tree_sitter_java.language())
@@ -100,6 +105,7 @@ def _get_method_code_in_file(
             _method_return_type_filter,
             _methods_parameters_filter,
             _anonymous_class_filter,
+            _class_name_filter,
         ],
     )
     if method is None or len(method) == 0:
@@ -200,6 +206,17 @@ def _is_anonymous_class(method_signature: MethodSignature) -> bool:
     return method_signature.class_list()[-1].isdigit()
 
 
+def _check_anonymous_class(
+    class_body_node: Node, method_signature: MethodSignature
+) -> bool:
+    line_comment = get_child(class_body_node, "line_comment")
+    if line_comment is None:
+        return False
+    text = line_comment.text.decode("utf8")
+    full_class_text = f"// from class: {method_signature.full_class_name()}"
+    return text == full_class_text
+
+
 def _anonymous_class_filter(
     methods: list[Node], method_signature: MethodSignature
 ) -> list[Node]:
@@ -214,11 +231,37 @@ def _anonymous_class_filter(
         class_body = get_parent(method, "class_body")
         if class_body is None:
             continue
-        line_comment = get_child(class_body, "line_comment")
-        text = line_comment.text.decode("utf8") if line_comment else ""
-        full_class_name = method_signature.full_class_name()
-        full_class_text = f"// from class: {full_class_name}"
-        if line_comment is not None and text == full_class_text:
+        if _check_anonymous_class(class_body, method_signature):
+            retained_methods.append(method)
+
+    return retained_methods
+
+
+def _class_name_filter(
+    methods: list[Node],
+    method_signature: MethodSignature,
+) -> list[Node]:
+    class_list = method_signature.class_list()
+
+    for class_name in reversed(class_list):
+        if _is_anonymous_class(method_signature):
+            class_list.pop()
+        else:
+            break
+
+    retained_methods = []
+    for method in methods:
+        cursor_node = method
+        for cursor_class in reversed(class_list):
+            cursor_node = find_ancestor_by_type(cursor_node, "class_declaration")
+            if cursor_node is None:
+                break
+            identifier = get_child(cursor_node, "identifier")
+            if identifier is None:
+                break
+            if identifier.text.decode("utf8") != cursor_class:
+                break
+        else:
             retained_methods.append(method)
 
     return retained_methods
