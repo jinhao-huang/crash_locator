@@ -85,6 +85,26 @@ def report_completion(report):
     android_version = _get_android_version(report)
     stack_trace = report["Crash Info in Dataset"]["stack trace signature"]
 
+    def _get_ambiguous_method_indexes(
+        stack_trace: list[str],
+    ) -> list[tuple[int, int]]:
+        indexes = []
+        index = 0
+        while index < len(stack_trace):
+            if ";" in stack_trace[index]:
+                end_index = index
+                while (
+                    end_index + 1 < len(stack_trace)
+                    and stack_trace[end_index + 1] == stack_trace[index]
+                ):
+                    end_index += 1
+                indexes.append((index, end_index))
+                index = end_index + 1
+            else:
+                index += 1
+
+        return indexes
+
     def complete_self_invoke_trace(stack_trace, apk_name, android_version):
         stack_trace_reverse = list(reversed(stack_trace))
         for index, (first_sig, second_sig) in enumerate(
@@ -154,6 +174,46 @@ def report_completion(report):
                 return True
         return False
 
+    def complete_stack_trace_with_pattern(stack_trace: list[str]):
+        patterns = {
+            "<android.app.Activity: void startActivityForResult(android.content.Intent,int,android.os.Bundle)>; <android.app.Activity: void startActivityForResult(java.lang.String,android.content.Intent,int,android.os.Bundle)>; <android.app.Activity: void startActivityForResult(android.content.Intent,int)>": {
+                2: [
+                    "android.app.Activity: void startActivityForResult(android.content.Intent,int,android.os.Bundle)",
+                    "android.app.Activity: void startActivityForResult(android.content.Intent,int)",
+                ]
+            },
+            "<android.app.Activity: void startActivity(android.content.Intent)>; <android.app.Activity: void startActivity(android.content.Intent,android.os.Bundle)>": {
+                2: [
+                    "android.app.Activity: void startActivity(android.content.Intent,android.os.Bundle)",
+                    "android.app.Activity: void startActivity(android.content.Intent)",
+                ]
+            },
+            "<android.os.Parcel: void readException(int,java.lang.String)>; <android.os.Parcel: void readException()>": {
+                1: ["android.os.Parcel: void readException(int,java.lang.String)"],
+                2: [
+                    "android.os.Parcel: void readException(int,java.lang.String)",
+                    "android.os.Parcel: void readException()",
+                ],
+            },
+        }
+
+        renew_flag = False
+        for start_index, end_index in _get_ambiguous_method_indexes(stack_trace):
+            ambiguous_methods_str = stack_trace[start_index]
+            ambiguous_methods_len = end_index - start_index + 1
+            if (
+                ambiguous_methods_str in patterns
+                and ambiguous_methods_len in patterns[ambiguous_methods_str]
+            ):
+                renew_flag = True
+                ambiguous_methods = patterns[ambiguous_methods_str][
+                    ambiguous_methods_len
+                ]
+                for i in range(start_index, end_index + 1):
+                    stack_trace[i] = ambiguous_methods[i - start_index]
+
+        return renew_flag
+
     from .utils.cg import get_called_methods, get_callers_method
 
     while True:
@@ -161,9 +221,7 @@ def report_completion(report):
         if new_trace is not None:
             stack_trace = new_trace
             continue
-        break
 
-    while True:
         stack_trace_reverse = list(reversed(stack_trace))
         if complete_stack_trace(
             stack_trace_reverse, apk_name, android_version, get_called_methods
@@ -173,6 +231,9 @@ def report_completion(report):
         elif complete_stack_trace(
             stack_trace, apk_name, android_version, get_callers_method
         ):
+            continue
+
+        if complete_stack_trace_with_pattern(stack_trace):
             continue
         break
 
