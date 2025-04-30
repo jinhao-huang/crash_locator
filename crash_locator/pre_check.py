@@ -195,6 +195,12 @@ def report_completion(report):
                     "android.os.Parcel: void readException()",
                 ],
             },
+            "<android.location.LocationManager: void requestLocationUpdates(java.lang.String,long,float,android.app.PendingIntent)>; <android.location.LocationManager: void requestLocationUpdates(java.lang.String,long,float,android.location.LocationListener,android.os.Looper)>; <android.location.LocationManager: void requestLocationUpdates(java.lang.String,long,float,android.location.LocationListener)>": {
+                2: [
+                    "android.location.LocationManager: void requestLocationUpdates(java.lang.String,long,float,android.location.LocationListener,android.os.Looper)",
+                    "android.location.LocationManager: void requestLocationUpdates(java.lang.String,long,float,android.location.LocationListener)",
+                ]
+            },
         }
 
         renew_flag = False
@@ -217,6 +223,9 @@ def report_completion(report):
     from .utils.cg import get_called_methods, get_callers_method
 
     while True:
+        if complete_stack_trace_with_pattern(stack_trace):
+            continue
+
         new_trace = complete_self_invoke_trace(stack_trace, apk_name, android_version)
         if new_trace is not None:
             stack_trace = new_trace
@@ -233,8 +242,6 @@ def report_completion(report):
         ):
             continue
 
-        if complete_stack_trace_with_pattern(stack_trace):
-            continue
         break
 
     report["Crash Info in Dataset"]["stack trace signature"] = stack_trace

@@ -212,7 +212,9 @@ class MethodSignature(BaseModel):
         1. <android.view.View: void invalidate(android.graphics.Rect)>; <android.view.View: void invalidate(int,int,int,int)>; <android.view.View: void invalidate()>
         """
         method_signature = method_signature.strip().strip("<>")
-        pattern1 = r"^(\S+)\.(\w+)(\$\S+)?: (\S+) ([\w$]+|<init>)(\([^()]*?\))?$"
+        pattern1 = (
+            r"^(\S+)\.(\w+)(\$\S+)?: (\S+) ([\w$]+|<init>|<clinit>)(\([^()]*?\))?$"
+        )
         pattern2 = r"^(\S+)\.(\w+)(\$\S+)?\.(\S+)$"
         match1 = re.match(pattern1, method_signature)
         match2 = re.match(pattern2, method_signature)
