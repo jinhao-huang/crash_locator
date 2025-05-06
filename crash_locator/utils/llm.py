@@ -1,6 +1,6 @@
 from openai import AsyncOpenAI
 from crash_locator.config import config
-from openai import RateLimitError, InternalServerError
+from openai import RateLimitError, InternalServerError, APIConnectionError
 from crash_locator.my_types import ReportInfo, Candidate, RunStatistic
 from crash_locator.prompt import Prompt
 from crash_locator.exceptions import UnExpectedResponseException
@@ -47,7 +47,9 @@ def _purge_conversation(conversation: list[ChatCompletionMessageParam]):
 @retry(
     wait=wait_random_exponential(min=1, max=60),
     stop=stop_after_attempt(6),
-    retry=retry_if_exception_type((RateLimitError, InternalServerError)),
+    retry=retry_if_exception_type(
+        (RateLimitError, InternalServerError, APIConnectionError)
+    ),
     before=before_log(logger, logging.WARNING),
     after=after_log(logger, logging.WARNING),
     reraise=True,
