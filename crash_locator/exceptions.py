@@ -38,8 +38,8 @@ class CandidateCodeNotFoundException(PreCheckException):
 
 
 class FrameworkCodeNotFoundException(PreCheckException):
-    def __init__(self, method_signature: MethodSignature):
-        self.message = f"Framework code not found for {method_signature}"
+    def __init__(self, method_signature: MethodSignature, reason: str):
+        self.message = f"Framework code not found for {method_signature}, {reason}"
         super().__init__(self.message)
 
 

@@ -87,8 +87,16 @@ class Config(BaseSettings):
     def crash_report_path(self, report_name: str) -> Path:
         return self.crash_reports_dir / report_name / f"{report_name}.json"
 
-    def android_code_dir(self, v: str) -> Path:
-        return self.resources_dir / "android_code" / f"android_{v}"
+    def android_code_dir(self, v: str) -> list[Path]:
+        base_dir = (
+            self.resources_dir
+            / "android_code"
+            / f"platform_frameworks_base-android-{v}_r1"
+        )
+        return [
+            base_dir / "core" / "java",
+            base_dir / "location" / "java",
+        ]
 
     def android_support_code_dir(self) -> Path:
         return self.resources_dir / "android_support_code" / "src"

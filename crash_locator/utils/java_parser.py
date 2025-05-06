@@ -92,10 +92,26 @@ def get_framework_code(
             method_signature,
         )
     else:
-        return _get_method_code_in_file(
-            config.android_code_dir(android_version) / method_signature.into_path(),
-            method_signature,
-        )
+        if (
+            method_signature.package_name == "android.location"
+            and method_signature.class_name == "ILocationManager"
+            and method_signature.parameters[3] == "android.location.ILocationListener"
+        ):
+            method_signature = MethodSignature(
+                package_name=method_signature.package_name,
+                class_name="LocationManager",
+                inner_class=None,
+                method_name=method_signature.method_name,
+                return_type=method_signature.return_type,
+                parameters=method_signature.parameters,
+            )
+            method_signature.parameters[3] = "android.location.LocationListener"
+        for android_code_dir in config.android_code_dir(android_version):
+            code_path = android_code_dir / method_signature.into_path()
+            if code_path.exists():
+                return _get_method_code_in_file(code_path, method_signature)
+
+        raise MethodFileNotFoundException()
 
 
 def _get_method_code_in_file(

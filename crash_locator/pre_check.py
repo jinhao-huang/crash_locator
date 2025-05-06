@@ -413,8 +413,8 @@ def _check_framework_code_exist(report: ReportInfo) -> None:
     for method in report.framework_trace:
         try:
             get_framework_code(method, report.android_version)
-        except MethodCodeException:
-            raise FrameworkCodeNotFoundException(method)
+        except MethodCodeException as e:
+            raise FrameworkCodeNotFoundException(method, str(e))
 
 
 def pre_check(crash_report_path: Path) -> ReportInfo:
