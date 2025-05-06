@@ -15,6 +15,7 @@ from crash_locator.my_types import (
     FailedReportInfo,
 )
 from tqdm import tqdm
+from tqdm.contrib.logging import logging_redirect_tqdm
 import logging
 import json
 import traceback
@@ -153,10 +154,13 @@ async def run():
         )
 
     try:
-        for task in tqdm(
-            asyncio.as_completed(tasks), total=len(tasks), desc="Processing reports"
-        ):
-            await task
+        with logging_redirect_tqdm():
+            for task in tqdm(
+                asyncio.as_completed(tasks),
+                total=len(tasks),
+                desc="Processing reports",
+            ):
+                await task
         logger.info(f"Statistic: {run_statistic}")
     except asyncio.CancelledError:
         logger.info("Received CancelledError signal, program will exit")
