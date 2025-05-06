@@ -3,7 +3,6 @@ from typing import Literal
 from typing import Annotated
 from pydantic import BaseModel, Field, PrivateAttr
 import re
-from crash_locator.exceptions import InvalidSignatureException
 from pathlib import Path
 from enum import Enum, StrEnum
 from typing import Self
@@ -173,6 +172,8 @@ class ClassSignature(BaseModel):
         1. android.view.ViewRoot
         2. android.view.ViewRoot$checkThread
         """
+        from crash_locator.exceptions import InvalidSignatureException
+
         class_signature = class_signature.strip().strip("<>")
         pattern = r"^(\S+)\.(\w+)(\$\S+)?$"
         match = re.match(pattern, class_signature)
@@ -211,6 +212,8 @@ class MethodSignature(BaseModel):
         Counter Example:
         1. <android.view.View: void invalidate(android.graphics.Rect)>; <android.view.View: void invalidate(int,int,int,int)>; <android.view.View: void invalidate()>
         """
+        from crash_locator.exceptions import InvalidSignatureException
+
         method_signature = method_signature.strip().strip("<>")
         pattern1 = (
             r"^(\S+)\.(\w+)(\$\S+)?: (\S+) ([\w$]+|<init>|<clinit>)(\([^()]*?\))?$"
@@ -468,7 +471,7 @@ class ReportInfo(BaseModel):
     crash_message: str
     stack_trace: list[str]
     stack_trace_short_api: list[str]
-    framework_trace: list[str]
+    framework_trace: list[MethodSignature]
     framework_trace_short_api: list[str]
     framework_entry_api: str
     candidates: list[Candidate]

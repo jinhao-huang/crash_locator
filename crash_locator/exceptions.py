@@ -1,3 +1,6 @@
+from crash_locator.my_types import MethodSignature
+
+
 class PreCheckException(Exception):
     def __init__(self, message="Pre-check failed"):
         self.message = message
@@ -31,6 +34,12 @@ class NoBuggyMethodCandidatesException(PreCheckException):
 class CandidateCodeNotFoundException(PreCheckException):
     def __init__(self, candidate_name: str):
         self.message = f"Candidate code not found for {candidate_name}"
+        super().__init__(self.message)
+
+
+class FrameworkCodeNotFoundException(PreCheckException):
+    def __init__(self, method_signature: MethodSignature):
+        self.message = f"Framework code not found for {method_signature}"
         super().__init__(self.message)
 
 

@@ -25,6 +25,7 @@ from crash_locator.exceptions import (
     NoBuggyMethodCandidatesException,
     CandidateCodeNotFoundException,
     NoTerminalAPIException,
+    FrameworkCodeNotFoundException,
 )
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
@@ -38,7 +39,7 @@ from crash_locator.my_types import (
     ReasonTypeLiteral,
 )
 from crash_locator.utils.helper import get_method_type
-from crash_locator.utils.java_parser import get_application_code
+from crash_locator.utils.java_parser import get_application_code, get_framework_code
 
 logger = logging.getLogger()
 
@@ -408,6 +409,14 @@ def _check_candidate_code_exist(report: ReportInfo) -> None:
             report.candidates.remove(candidate)
 
 
+def _check_framework_code_exist(report: ReportInfo) -> None:
+    for method in report.framework_trace:
+        try:
+            get_framework_code(method, report.android_version)
+        except MethodCodeException:
+            raise FrameworkCodeNotFoundException(method)
+
+
 def pre_check(crash_report_path: Path) -> ReportInfo:
     report = json.load(open(crash_report_path, "r"))
 
@@ -435,7 +444,9 @@ def pre_check(crash_report_path: Path) -> ReportInfo:
         .split("$")[-1],
         stack_trace=stack_trace,
         stack_trace_short_api=stack_trace_short_api,
-        framework_trace=framework_trace,
+        framework_trace=[
+            MethodSignature.from_str(method) for method in framework_trace
+        ],
         framework_trace_short_api=framework_short_trace,
         framework_entry_api=framework_entry_api,
         candidates=[
@@ -465,6 +476,7 @@ def pre_check(crash_report_path: Path) -> ReportInfo:
     _check_buggy_method_candidates_exist(report_info)
     _remove_useless_candidates(report_info)
     _check_candidate_code_exist(report_info)
+    _check_framework_code_exist(report_info)
 
     return report_info
 

@@ -40,6 +40,7 @@ def get_application_code(
         ValueError: The code is not in the application code directory.
         NoMethodFoundCodeError: No method found in the file.
         MultipleMethodsCodeError: Multiple methods found in the file.
+        MethodFileNotFoundException: The file does not exist.
     """
     if len(candidate.extend_hierarchy) == 0:
         extend_hierarchy = [
@@ -62,7 +63,7 @@ def get_application_code(
             return_type=candidate.signature.return_type,
         )
         if PackageType.get_package_type(method_signature) != PackageType.APPLICATION:
-            raise ValueError(f"The code is not in the application code directory.")
+            raise ValueError("The code is not in the application code directory.")
         try:
             return _get_method_code_in_file(
                 config.application_code_dir(apk_name) / method_signature.into_path(),
@@ -72,6 +73,29 @@ def get_application_code(
             continue
 
     raise NoMethodFoundCodeError()
+
+
+def get_framework_code(
+    method_signature: MethodSignature,
+    android_version: str,
+) -> str:
+    """Get the framework code for a given method signature and android version.
+
+    Raises:
+        NoMethodFoundCodeError: No method found in the file.
+        MultipleMethodsCodeError: Multiple methods found in the file.
+        MethodFileNotFoundException: The file does not exist.
+    """
+    if method_signature.package_name.startswith("android.support"):
+        return _get_method_code_in_file(
+            config.android_support_code_dir() / method_signature.into_path(),
+            method_signature,
+        )
+    else:
+        return _get_method_code_in_file(
+            config.android_code_dir(android_version) / method_signature.into_path(),
+            method_signature,
+        )
 
 
 def _get_method_code_in_file(

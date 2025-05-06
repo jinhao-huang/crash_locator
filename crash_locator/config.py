@@ -90,6 +90,9 @@ class Config(BaseSettings):
     def android_code_dir(self, v: str) -> Path:
         return self.resources_dir / "android_code" / f"android_{v}"
 
+    def android_support_code_dir(self) -> Path:
+        return self.resources_dir / "android_support_code" / "src"
+
     def application_code_dir(self, apk_name: str) -> Path:
         return self.resources_dir / "application_code" / apk_name / "sources"
 
