@@ -475,23 +475,27 @@ class ReportInfo(BaseModel):
     buggy_method: MethodSignature
 
     @property
-    def sorted_candidates(self) -> list[Candidate]:
+    def base_candidates(self) -> list[Candidate]:
         """
-        Sort the candidates by stack trace order
+        The candidates that are in stack trace
         """
-        sorted_candidates = []
+        name_to_candidate = {candidate.name: candidate for candidate in self.candidates}
+        return [
+            name_to_candidate[method]
+            for method in self.stack_trace_short_api
+            if method in name_to_candidate
+        ]
 
-        for method in self.stack_trace_short_api:
-            for candidate in self.candidates:
-                if candidate.name == method:
-                    sorted_candidates.append(candidate)
-                    break
-
-        for candidate in self.candidates:
-            if candidate not in sorted_candidates:
-                sorted_candidates.append(candidate)
-
-        return sorted_candidates
+    @property
+    def extra_candidates(self) -> list[Candidate]:
+        """
+        The candidates that are not in stack trace
+        """
+        return [
+            candidate
+            for candidate in self.candidates
+            if candidate.name not in self.stack_trace_short_api
+        ]
 
 
 class PackageType(Enum):

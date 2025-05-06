@@ -25,7 +25,6 @@ from tenacity import (
     after_log,
 )
 import logging
-import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -126,13 +125,16 @@ async def _query_llm_with_retry(
     raise UnExpectedResponseException("Invalid response from LLM")
 
 
-def _save_conversation(conversation: list[ChatCompletionMessageParam], dir: Path):
+def _save_conversation(
+    conversation: list[ChatCompletionMessageParam], report_name: str, name: str
+):
+    dir = config.result_report_filter_dir(report_name) / "conversation"
     dir.mkdir(parents=True, exist_ok=True)
     logger.info(f"Saving conversation to {dir}")
 
-    with open(dir / "conversation.json", "w") as f:
-        json.dump(conversation, f)
-    with open(dir / "conversation.md", "w") as f:
+    with open(dir / f"{name}.json", "w") as f:
+        json.dump(conversation, f, indent=4)
+    with open(dir / f"{name}.md", "w") as f:
         for message in conversation:
             f.write(f"## {message['role']}\n")
             f.write("Content:\n")
@@ -154,8 +156,10 @@ def _save_retained_candidates(candidates: list[Candidate], dir: Path):
         )
 
 
-async def query_filter_candidate(report_info: ReportInfo) -> list[Candidate]:
-    logger.info(f"Starting candidate filtering for {report_info.apk_name}")
+async def _query_base_candidates(
+    report_info: ReportInfo,
+) -> tuple[list[Candidate], list[ChatCompletionMessageParam]]:
+    logger.info(f"Starting base candidate query for {report_info.apk_name}")
 
     messages = [
         ChatCompletionSystemMessageParam(
@@ -168,9 +172,9 @@ async def query_filter_candidate(report_info: ReportInfo) -> list[Candidate]:
     ]
 
     retained_candidates = []
-    for index, candidate in enumerate(report_info.sorted_candidates):
+    for index, candidate in enumerate(report_info.base_candidates):
         logger.info(
-            f"Filtering candidate {index + 1} / {len(report_info.sorted_candidates)}"
+            f"Querying base candidate {index + 1} / {len(report_info.base_candidates)}"
         )
         logger.info(f"Candidate: {candidate.name}")
 
@@ -180,7 +184,38 @@ async def query_filter_candidate(report_info: ReportInfo) -> list[Candidate]:
                 role="user",
             )
         )
-        # TODO: only add the necessary candidate to the context
+        messages = await _query_llm_with_retry(
+            messages,
+            3,
+            lambda x: ("Yes" in x and "No" not in x) or ("No" in x and "Yes" not in x),
+        )
+
+        if "Yes" in messages[-1]["content"]:
+            retained_candidates.append(candidate)
+
+    _save_conversation(messages, report_info.apk_name, "base_candidates")
+    return retained_candidates, messages
+
+
+async def _query_extra_candidates(
+    report_info: ReportInfo,
+    retained_candidates: list[Candidate],
+    base_messages: list[ChatCompletionMessageParam],
+) -> list[Candidate]:
+    logger.info(f"Starting extra candidate query for {report_info.apk_name}")
+
+    for index, candidate in enumerate(report_info.extra_candidates):
+        logger.info(
+            f"Querying extra candidate {index + 1} / {len(report_info.extra_candidates)}"
+        )
+        logger.info(f"Candidate: {candidate.name}")
+        messages = base_messages.copy()
+        messages.append(
+            ChatCompletionUserMessageParam(
+                content=Prompt.FILTER_CANDIDATE_METHOD(report_info, candidate),
+                role="user",
+            )
+        )
         messages = await _query_llm_with_retry(
             messages,
             3,
@@ -188,8 +223,21 @@ async def query_filter_candidate(report_info: ReportInfo) -> list[Candidate]:
         )
         if "Yes" in messages[-1]["content"]:
             retained_candidates.append(candidate)
+        _save_conversation(
+            messages, report_info.apk_name, f"extra_candidates_{index + 1}"
+        )
 
-    _save_conversation(messages, config.result_report_filter_dir(report_info.apk_name))
+    return retained_candidates
+
+
+async def query_filter_candidate(report_info: ReportInfo) -> list[Candidate]:
+    logger.info(f"Starting candidate filtering for {report_info.apk_name}")
+
+    retained_candidates, base_messages = await _query_base_candidates(report_info)
+    retained_candidates = await _query_extra_candidates(
+        report_info, retained_candidates, base_messages
+    )
+
     _save_retained_candidates(
         retained_candidates,
         config.result_report_filter_dir(report_info.apk_name),
