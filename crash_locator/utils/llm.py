@@ -1,17 +1,16 @@
 from openai import AsyncOpenAI
 from crash_locator.config import config
 from openai import RateLimitError, InternalServerError, APIConnectionError
-from crash_locator.my_types import ReportInfo, Candidate, RunStatistic
+from crash_locator.my_types import ReportInfo, Candidate, RunStatistic, MethodSignature
 from crash_locator.prompt import Prompt
 from crash_locator.exceptions import UnExpectedResponseException
-from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 from openai.types.chat.chat_completion_message_param import (
     ChatCompletionMessageParam,
-    ChatCompletionSystemMessageParam,
     ChatCompletionUserMessageParam,
     ChatCompletionAssistantMessageParam,
 )
 from crash_locator.config import run_statistic
+from crash_locator.utils.java_parser import get_framework_code
 from typing import Callable
 import json
 from pathlib import Path
@@ -58,50 +57,31 @@ async def _query_llm(messages: list[ChatCompletionMessageParam]):
     logger.info("Preparing to query LLM")
     logger.debug(f"Messages: {conversation}")
 
-    collected_chunks: list[ChatCompletionChunk] = []
-    collected_content: list[str | None] = []
-    collected_reasoning_content: list[str | None] = []
-
     response = await client.chat.completions.create(
         model=config.openai_model,
         messages=conversation,
         timeout=240,
-        stream=True,
+        stream=False,
     )
 
-    async for chunk in response:
-        logger.debug(f"Received chunk: {chunk}")
-        collected_chunks.append(chunk)
-
-        delta = chunk.choices[0].delta
-        collected_content.append(delta.content)
-        if "reasoning_content" in delta.model_extra:
-            collected_reasoning_content.append(delta.model_extra["reasoning_content"])
-
-    full_content = "".join([m for m in collected_content if m is not None])
-    full_reasoning_content = "".join(
-        [m for m in collected_reasoning_content if m is not None]
-    )
-    last_chunk = collected_chunks[-1]
+    full_content = response.choices[0].message.content
     token_usage = RunStatistic.TokenUsage(
-        input_tokens=last_chunk.usage.prompt_tokens,
-        output_tokens=last_chunk.usage.completion_tokens,
+        input_tokens=response.usage.prompt_tokens,
+        output_tokens=response.usage.completion_tokens,
     )
     run_statistic.add_token_usage(token_usage)
     logger.info("LLM query completed")
     logger.debug(f"Full content: {full_content}")
-    logger.debug(f"Full reasoning content: {full_reasoning_content}")
     logger.debug(f"Token usage: {token_usage}")
 
-    conversation.append(
+    messages.append(
         ChatCompletionAssistantMessageParam(
             content=full_content,
             role="assistant",
-            reasoning_content=full_reasoning_content,
         )
     )
 
-    return conversation
+    return messages
 
 
 async def _query_llm_with_retry(
@@ -120,15 +100,15 @@ async def _query_llm_with_retry(
             logger.info("Get valid response from LLM")
             return conversation
 
-        logger.error("Get unexpected response from LLM")
+        logger.error(f"Get unexpected response from LLM: {content}")
 
     raise UnExpectedResponseException("Invalid response from LLM")
 
 
 def _save_conversation(
-    conversation: list[ChatCompletionMessageParam], report_name: str, name: str
+    conversation: list[ChatCompletionMessageParam], base_dir: Path, name: str
 ):
-    dir = config.result_report_filter_dir(report_name) / "conversation"
+    dir = base_dir / "conversation"
     dir.mkdir(parents=True, exist_ok=True)
     logger.info(f"Saving conversation to {dir}")
 
@@ -158,18 +138,11 @@ def _save_retained_candidates(candidates: list[Candidate], dir: Path):
 
 async def _query_base_candidates(
     report_info: ReportInfo,
+    constraint: str | None = None,
 ) -> tuple[list[Candidate], list[ChatCompletionMessageParam]]:
     logger.info(f"Starting base candidate query for {report_info.apk_name}")
 
-    messages = [
-        ChatCompletionSystemMessageParam(
-            content=Prompt.FILTER_CANDIDATE_SYSTEM, role="system"
-        ),
-        ChatCompletionUserMessageParam(
-            content=Prompt.FILTER_CANDIDATE_CRASH(report_info),
-            role="user",
-        ),
-    ]
+    messages = Prompt.base_filter_candidate_prompt(report_info, constraint)
 
     retained_candidates = []
     for index, candidate in enumerate(report_info.base_candidates):
@@ -193,7 +166,11 @@ async def _query_base_candidates(
         if "Yes" in messages[-1]["content"]:
             retained_candidates.append(candidate)
 
-    _save_conversation(messages, report_info.apk_name, "base_candidates")
+    _save_conversation(
+        messages,
+        config.result_report_filter_dir(report_info.apk_name),
+        "base_candidates",
+    )
     return retained_candidates, messages
 
 
@@ -224,16 +201,22 @@ async def _query_extra_candidates(
         if "Yes" in messages[-1]["content"]:
             retained_candidates.append(candidate)
         _save_conversation(
-            messages, report_info.apk_name, f"extra_candidates_{index + 1}"
+            messages,
+            config.result_report_filter_dir(report_info.apk_name),
+            f"extra_candidates_{index + 1}",
         )
 
     return retained_candidates
 
 
-async def query_filter_candidate(report_info: ReportInfo) -> list[Candidate]:
+async def query_filter_candidate(
+    report_info: ReportInfo, constraint: str | None = None
+) -> list[Candidate]:
     logger.info(f"Starting candidate filtering for {report_info.apk_name}")
 
-    retained_candidates, base_messages = await _query_base_candidates(report_info)
+    retained_candidates, base_messages = await _query_base_candidates(
+        report_info, constraint
+    )
     retained_candidates = await _query_extra_candidates(
         report_info, retained_candidates, base_messages
     )
@@ -246,3 +229,105 @@ async def query_filter_candidate(report_info: ReportInfo) -> list[Candidate]:
         f"Candidate filtering completed, before: {len(report_info.candidates)}, after: {len(retained_candidates)}"
     )
     return retained_candidates
+
+
+def _constraint_parser(message: str) -> str | None:
+    import re
+
+    pattern = r"Constraint:\s?```\s?(.*?)\s?```"
+    matches = re.findall(pattern, message, re.DOTALL)
+
+    if len(matches) == 0:
+        return None
+
+    return matches[0].strip()
+
+
+async def _extract_constraint(
+    method: MethodSignature,
+    report_info: ReportInfo,
+) -> str:
+    code = get_framework_code(method, report_info.android_version)
+    messages = Prompt.base_extractor_prompt()
+    messages.append(
+        ChatCompletionUserMessageParam(
+            content=Prompt.EXTRACTOR_USER_PROMPT(
+                code,
+                method.full_class_name(),
+                report_info.exception_type,
+                report_info.crash_message,
+            ),
+            role="user",
+        )
+    )
+
+    conversation = await _query_llm_with_retry(
+        messages,
+        3,
+        lambda x: _constraint_parser(x) is not None,
+    )
+    _save_conversation(
+        conversation,
+        config.result_report_constraint_dir(report_info.apk_name),
+        "extract_constraint",
+    )
+    return _constraint_parser(conversation[-1]["content"])
+
+
+async def _infer_constraint(
+    method: MethodSignature,
+    messages: list[ChatCompletionMessageParam],
+    original_constraint: str,
+    report_info: ReportInfo,
+) -> str:
+    code = get_framework_code(method, report_info.android_version)
+    messages.append(
+        ChatCompletionUserMessageParam(
+            content=Prompt.INFERRER_USER_PROMPT(
+                code,
+                method.full_class_name(),
+                original_constraint,
+            ),
+            role="user",
+        )
+    )
+
+    conversation = await _query_llm_with_retry(
+        messages, 3, lambda x: _constraint_parser(x) is not None
+    )
+    _save_conversation(
+        conversation,
+        config.result_report_constraint_dir(report_info.apk_name),
+        "infer_constraint",
+    )
+    return _constraint_parser(conversation[-1]["content"])
+
+
+async def query_filter_candidate_with_constraint(
+    report_info: ReportInfo,
+) -> list[Candidate]:
+    logger.info(f"Starting candidate filtering for {report_info.apk_name}")
+
+    inference_messages = Prompt.base_inferrer_prompt()
+    for index, framework_method in enumerate(report_info.framework_trace):
+        logger.info(f"Inferring constraint for {framework_method}")
+        logger.info(
+            f"Inferring process: {index + 1} / {len(report_info.framework_trace)}"
+        )
+
+        if index == 0:
+            logger.info(f"Extracting constraint for {framework_method}")
+            constraint = await _extract_constraint(framework_method, report_info)
+        else:
+            constraint = await _infer_constraint(
+                framework_method, inference_messages, constraint, report_info
+            )
+
+    logger.info(f"Constraint is extracted: {constraint}")
+    with open(
+        config.result_report_constraint_dir(report_info.apk_name) / "constraint.txt",
+        "w",
+    ) as f:
+        f.write(constraint)
+
+    return await query_filter_candidate(report_info, constraint)

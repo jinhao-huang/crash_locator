@@ -88,7 +88,10 @@ async def _process_report(
     task_name: str,
     semaphore: asyncio.Semaphore,
 ):
-    from crash_locator.utils.llm import query_filter_candidate
+    from crash_locator.utils.llm import (
+        query_filter_candidate,
+        query_filter_candidate_with_constraint,
+    )
 
     async with semaphore:
         report_name = pre_check_report_dir.name
@@ -106,7 +109,12 @@ async def _process_report(
         _copy_report(report_name)
 
         try:
-            retained_candidates = await query_filter_candidate(report_info)
+            if config.enable_extract_constraint:
+                retained_candidates = await query_filter_candidate_with_constraint(
+                    report_info
+                )
+            else:
+                retained_candidates = await query_filter_candidate(report_info)
 
         except asyncio.CancelledError:
             logger.info(f"Task {task_name} cancelled")

@@ -15,6 +15,8 @@ class Config(BaseSettings):
         env_prefix="crash_locator_", env_file=".env", cli_parse_args=True
     )
 
+    enable_extract_constraint: bool = True
+
     root_dir: Path = Path(__file__).parent.parent
 
     @property
@@ -63,6 +65,9 @@ class Config(BaseSettings):
 
     def result_report_filter_dir(self, report_name: str) -> Path:
         return self.result_report_dir(report_name) / "filter"
+
+    def result_report_constraint_dir(self, report_name: str) -> Path:
+        return self.result_report_dir(report_name) / "constraint"
 
     max_workers: int = 4
     retry_failed_reports: bool = True
