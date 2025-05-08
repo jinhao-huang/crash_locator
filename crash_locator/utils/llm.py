@@ -62,6 +62,7 @@ async def _query_llm(messages: list[ChatCompletionMessageParam]):
         messages=conversation,
         timeout=240,
         stream=False,
+        reasoning_effort="medium",
     )
 
     full_content = response.choices[0].message.content

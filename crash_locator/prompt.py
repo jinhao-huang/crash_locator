@@ -4,7 +4,6 @@ from openai.types.chat.chat_completion_message_param import (
     ChatCompletionMessageParam,
     ChatCompletionSystemMessageParam,
     ChatCompletionUserMessageParam,
-    ChatCompletionAssistantMessageParam,
 )
 
 
@@ -99,7 +98,7 @@ Describe constraint in this format: [{Constrained method name}]: {Constraint}
 // Note: We will use static analysis tool to check the result, so the parameter type must match the method signature, and the field type must match its declaration.
 // Note: These methods is from android framework, you can assume the unprovided method usage by your android expert knowledge.
 
-Please use the following format for the conversation:
+Please use the following format for the conversation(Your response should be in the same format):
 Code: ```
 Java method code and some basic information about the method.
 ```
@@ -144,7 +143,7 @@ Exception Message: Already in the pool!
 
     EXTRACTOR_ASSISTANT_EXAMPLE1 = """
 Constraint: ```
-[release]: isInPool(<Parameter 0: T instance>) returns true
+[release]: <Parameter 0: T instance> must not already be present in <Field Pools: T[] mPool>
 ```
 """
 
@@ -192,7 +191,7 @@ Describe constraint in this format: [{Constrained method name}]: {Constraint}
 // Note: We will use static analysis tool to check the result, so the parameter type must match the method signature, and the field type must match its declaration.
 // Note: These methods is from android framework, you can assume the unprovided method usage by your android expert knowledge.
 
-Please answer in the following format:
+Please use the following format for the conversation(Your response should be in the same format):
 Code: ```
 Java method code and some basic information about the method.
 ```

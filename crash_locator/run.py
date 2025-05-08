@@ -110,10 +110,12 @@ async def _process_report(
 
         try:
             if config.enable_extract_constraint:
+                logger.info("Enable constraint extraction")
                 retained_candidates = await query_filter_candidate_with_constraint(
                     report_info
                 )
             else:
+                logger.info("Disable constraint extraction")
                 retained_candidates = await query_filter_candidate(report_info)
 
         except asyncio.CancelledError:
