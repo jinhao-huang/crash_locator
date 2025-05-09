@@ -1,15 +1,11 @@
 from openai import AsyncOpenAI
-from crash_locator.config import config
 from openai import RateLimitError, InternalServerError, APIConnectionError
+from openai.types.responses.easy_input_message_param import EasyInputMessageParam
+from openai.types.responses.response_input_param import ResponseInputParam
+from crash_locator.config import config, run_statistic
 from crash_locator.my_types import ReportInfo, Candidate, RunStatistic, MethodSignature
 from crash_locator.prompt import Prompt
 from crash_locator.exceptions import UnExpectedResponseException
-from openai.types.chat.chat_completion_message_param import (
-    ChatCompletionMessageParam,
-    ChatCompletionUserMessageParam,
-    ChatCompletionAssistantMessageParam,
-)
-from crash_locator.config import run_statistic
 from crash_locator.utils.java_parser import get_framework_code
 from typing import Callable
 import json
@@ -30,7 +26,9 @@ logger = logging.getLogger(__name__)
 client = AsyncOpenAI(base_url=config.openai_base_url, api_key=config.openai_api_key)
 
 
-def _purge_conversation(conversation: list[ChatCompletionMessageParam]):
+def _purge_conversation(
+    conversation: ResponseInputParam,
+) -> ResponseInputParam:
     """
     Purge the reasoning content from the conversation
     """
@@ -52,32 +50,34 @@ def _purge_conversation(conversation: list[ChatCompletionMessageParam]):
     after=after_log(logger, logging.WARNING),
     reraise=True,
 )
-async def _query_llm(messages: list[ChatCompletionMessageParam]):
-    conversation = _purge_conversation(messages)
+async def _query_llm(messages: ResponseInputParam):
     logger.info("Preparing to query LLM")
-    logger.debug(f"Messages: {conversation}")
+    logger.debug(f"Messages: {messages}")
 
-    response = await client.chat.completions.create(
+    response = await client.responses.create(
         model=config.openai_model,
-        messages=conversation,
+        input=messages,
         timeout=240,
         stream=False,
-        reasoning_effort="medium",
+        reasoning={
+            "effort": "medium",
+            "summary": "auto",
+        },
     )
 
-    full_content = response.choices[0].message.content
+    content = response.output_text
     token_usage = RunStatistic.TokenUsage(
-        input_tokens=response.usage.prompt_tokens,
-        output_tokens=response.usage.completion_tokens,
+        input_tokens=response.usage.input_tokens,
+        output_tokens=response.usage.output_tokens,
     )
     run_statistic.add_token_usage(token_usage)
     logger.info("LLM query completed")
-    logger.debug(f"Full content: {full_content}")
+    logger.debug(f"Content: {content}")
     logger.debug(f"Token usage: {token_usage}")
 
     messages.append(
-        ChatCompletionAssistantMessageParam(
-            content=full_content,
+        EasyInputMessageParam(
+            content=content,
             role="assistant",
         )
     )
@@ -86,7 +86,7 @@ async def _query_llm(messages: list[ChatCompletionMessageParam]):
 
 
 async def _query_llm_with_retry(
-    messages: list[ChatCompletionMessageParam],
+    messages: ResponseInputParam,
     retry_times: int,
     validate_func: Callable[[str], bool],
 ):
@@ -106,9 +106,7 @@ async def _query_llm_with_retry(
     raise UnExpectedResponseException("Invalid response from LLM")
 
 
-def _save_conversation(
-    conversation: list[ChatCompletionMessageParam], base_dir: Path, name: str
-):
+def _save_conversation(conversation: ResponseInputParam, base_dir: Path, name: str):
     dir = base_dir / "conversation"
     dir.mkdir(parents=True, exist_ok=True)
     logger.info(f"Saving conversation to {dir}")
@@ -140,7 +138,7 @@ def _save_retained_candidates(candidates: list[Candidate], dir: Path):
 async def _query_base_candidates(
     report_info: ReportInfo,
     constraint: str | None = None,
-) -> tuple[list[Candidate], list[ChatCompletionMessageParam]]:
+) -> tuple[list[Candidate], ResponseInputParam]:
     logger.info(f"Starting base candidate query for {report_info.apk_name}")
 
     messages = Prompt.base_filter_candidate_prompt(report_info, constraint)
@@ -153,7 +151,7 @@ async def _query_base_candidates(
         logger.info(f"Candidate: {candidate.name}")
 
         messages.append(
-            ChatCompletionUserMessageParam(
+            EasyInputMessageParam(
                 content=Prompt.FILTER_CANDIDATE_METHOD(report_info, candidate),
                 role="user",
             )
@@ -178,7 +176,7 @@ async def _query_base_candidates(
 async def _query_extra_candidates(
     report_info: ReportInfo,
     retained_candidates: list[Candidate],
-    base_messages: list[ChatCompletionMessageParam],
+    base_messages: ResponseInputParam,
 ) -> list[Candidate]:
     logger.info(f"Starting extra candidate query for {report_info.apk_name}")
 
@@ -189,7 +187,7 @@ async def _query_extra_candidates(
         logger.info(f"Candidate: {candidate.name}")
         messages = base_messages.copy()
         messages.append(
-            ChatCompletionUserMessageParam(
+            EasyInputMessageParam(
                 content=Prompt.FILTER_CANDIDATE_METHOD(report_info, candidate),
                 role="user",
             )
@@ -251,7 +249,7 @@ async def _extract_constraint(
     code = get_framework_code(method, report_info.android_version)
     messages = Prompt.base_extractor_prompt()
     messages.append(
-        ChatCompletionUserMessageParam(
+        EasyInputMessageParam(
             content=Prompt.EXTRACTOR_USER_PROMPT(
                 code,
                 method.full_class_name(),
@@ -277,13 +275,13 @@ async def _extract_constraint(
 
 async def _infer_constraint(
     method: MethodSignature,
-    messages: list[ChatCompletionMessageParam],
+    messages: ResponseInputParam,
     original_constraint: str,
     report_info: ReportInfo,
 ) -> str:
     code = get_framework_code(method, report_info.android_version)
     messages.append(
-        ChatCompletionUserMessageParam(
+        EasyInputMessageParam(
             content=Prompt.INFERRER_USER_PROMPT(
                 code,
                 method.full_class_name(),

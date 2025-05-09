@@ -1,11 +1,7 @@
 from crash_locator.my_types import ReportInfo, Candidate
 from crash_locator.utils.java_parser import get_application_code
-from openai.types.chat.chat_completion_message_param import (
-    ChatCompletionMessageParam,
-    ChatCompletionSystemMessageParam,
-    ChatCompletionUserMessageParam,
-)
-
+from openai.types.responses.response_input_param import ResponseInputParam
+from openai.types.responses.easy_input_message_param import EasyInputMessageParam
 
 new_line = "\n"
 
@@ -57,12 +53,12 @@ Android Version:
     def base_filter_candidate_prompt(
         report_info: ReportInfo,
         constraint: str | None = None,
-    ) -> list[ChatCompletionMessageParam]:
+    ) -> ResponseInputParam:
         return [
-            ChatCompletionSystemMessageParam(
+            EasyInputMessageParam(
                 content=Prompt.FILTER_CANDIDATE_SYSTEM(constraint), role="system"
             ),
-            ChatCompletionUserMessageParam(
+            EasyInputMessageParam(
                 content=Prompt.FILTER_CANDIDATE_CRASH(report_info, constraint),
                 role="user",
             ),
@@ -165,9 +161,9 @@ Exception Message: {crash_message}
 """
 
     @staticmethod
-    def base_extractor_prompt() -> list[ChatCompletionMessageParam]:
+    def base_extractor_prompt() -> ResponseInputParam:
         return [
-            ChatCompletionSystemMessageParam(
+            EasyInputMessageParam(
                 content=Prompt.EXTRACTOR_SYSTEM_PROMPT, role="system"
             ),
         ]
@@ -248,9 +244,7 @@ Original_Constraint: ```
 """
 
     @staticmethod
-    def base_inferrer_prompt() -> list[ChatCompletionMessageParam]:
+    def base_inferrer_prompt() -> ResponseInputParam:
         return [
-            ChatCompletionSystemMessageParam(
-                content=Prompt.INFERRER_SYSTEM_PROMPT, role="system"
-            ),
+            EasyInputMessageParam(content=Prompt.INFERRER_SYSTEM_PROMPT, role="system"),
         ]
