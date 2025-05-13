@@ -406,7 +406,8 @@ def _check_candidate_code_exist(report: ReportInfo) -> None:
         except MethodCodeException:
             raise CandidateCodeNotFoundException(str(candidate.signature))
         except ValueError:
-            report.candidates.remove(candidate)
+            if candidate.reasons.reason_type != ReasonTypeLiteral.NOT_OVERRIDE_METHOD:
+                report.candidates.remove(candidate)
 
 
 def _check_framework_code_exist(report: ReportInfo) -> None:
@@ -473,10 +474,10 @@ def pre_check(crash_report_path: Path) -> ReportInfo:
         ),
     )
 
-    _check_buggy_method_candidates_exist(report_info)
     _remove_useless_candidates(report_info)
     _check_candidate_code_exist(report_info)
     _check_framework_code_exist(report_info)
+    _check_buggy_method_candidates_exist(report_info)
 
     return report_info
 

@@ -2,11 +2,37 @@ from crash_locator.my_types import ReportInfo, Candidate
 from crash_locator.utils.java_parser import get_application_code
 from openai.types.responses.response_input_param import ResponseInputParam
 from openai.types.responses.easy_input_message_param import EasyInputMessageParam
+from crash_locator.my_types import ReasonTypeLiteral
 
 new_line = "\n"
 
 
 class Prompt:
+    class Part:
+        @staticmethod
+        def merger(parts: list[str]) -> str:
+            return new_line.join(parts)
+
+        @staticmethod
+        def candidate_method(candidate: Candidate) -> str:
+            return f"Candidate Method: {candidate.signature}"
+
+        @staticmethod
+        def method_code(code: str) -> str:
+            return f"""Method Code:
+```
+{code}
+```
+"""
+
+        @staticmethod
+        def candidate_reason(candidate: Candidate) -> str:
+            return f"""Candidate Reason:
+```
+{candidate.reasons.reason_explanation()}
+```
+"""
+
     @staticmethod
     def FILTER_CANDIDATE_SYSTEM(constraint: str | None = None) -> str:
         return f"""
@@ -26,7 +52,7 @@ For those candidate methods that are most likely to be related to the crash, you
         report_info: ReportInfo, constraint: str | None = None
     ) -> str:
         return f"""
-Crash Report:
+Crash Message:
 ```
 {report_info.crash_message}
 ```
@@ -66,20 +92,15 @@ Android Version:
 
     @staticmethod
     def FILTER_CANDIDATE_METHOD(report_info: ReportInfo, candidate: Candidate) -> str:
-        code = get_application_code(report_info.apk_name, candidate)
-        return f"""
-Candidate Method: {candidate.signature}
+        parts = [
+            Prompt.Part.candidate_method(candidate),
+        ]
+        if candidate.reasons.reason_type != ReasonTypeLiteral.NOT_OVERRIDE_METHOD:
+            code = get_application_code(report_info.apk_name, candidate)
+            parts.append(Prompt.Part.method_code(code))
 
-Method Code:
-```
-{code}
-```
-
-Candidate Reason:
-```
-{candidate.reasons.reason_explanation()}
-```
-"""
+        parts.append(Prompt.Part.candidate_reason(candidate))
+        return Prompt.Part.merger(parts)
 
     EXTRACTOR_SYSTEM_PROMPT: str = """
 Your task is to extract the precondition constraint of the target exception in Java methods and convert them into constraint related to method parameters or class field.

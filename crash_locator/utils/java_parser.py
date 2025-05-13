@@ -119,6 +119,7 @@ def _get_method_code_in_file(
     method_signature: MethodSignature,
 ) -> str:
     logger.debug(f"Getting method code in file: {file_path}")
+    # TODO: handle <init> method
     method_name = method_signature.method_name
 
     if not file_path.exists():

@@ -410,7 +410,7 @@ Our static analysis tool detect that the class `{self.application_class}` extend
 
 When `{self.framework_method}` is invoked, an unconditional exception is thrown out.
 
-But in the application code, the method is not override.
+But in the application code, the method is not override(Therefore, for this method, no code has been provided)
 """
 
 
