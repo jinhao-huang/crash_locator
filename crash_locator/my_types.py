@@ -98,9 +98,18 @@ class RunStatistic(BaseModel):
         if path is not None:
             self._path = path
 
+    def _sort(self):
+        self.finished_reports_detail = dict(
+            sorted(
+                self.finished_reports_detail.items(),
+                key=lambda x: x[0],
+            )
+        )
+
     def _save_statistic(self):
         if self._path is None:
-            return
+            raise ValueError("Path is not set")
+        self._sort()
         with open(self._path, "w") as f:
             f.write(self.model_dump_json(indent=4))
 
