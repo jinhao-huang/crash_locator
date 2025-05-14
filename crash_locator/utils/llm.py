@@ -61,7 +61,6 @@ async def _query_llm(messages: ResponseInputParam):
         stream=False,
         reasoning={
             "effort": "medium",
-            "summary": "auto",
         },
     )
 
