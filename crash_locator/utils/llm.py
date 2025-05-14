@@ -1,16 +1,14 @@
 from openai import AsyncOpenAI
 from openai import RateLimitError, InternalServerError, APIConnectionError
-from openai.types.responses.easy_input_message_param import EasyInputMessageParam
-from openai.types.responses.response_input_param import ResponseInputParam
 from crash_locator.config import config, run_statistic
 from crash_locator.my_types import ReportInfo, Candidate, RunStatistic, MethodSignature
 from crash_locator.prompt import Prompt
 from crash_locator.exceptions import UnExpectedResponseException
 from crash_locator.utils.java_parser import get_framework_code
+from crash_locator.types.llm import Conversation, Message, Role
 from typing import Callable
 import json
 from pathlib import Path
-from copy import deepcopy
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -26,20 +24,6 @@ logger = logging.getLogger(__name__)
 client = AsyncOpenAI(base_url=config.openai_base_url, api_key=config.openai_api_key)
 
 
-def _purge_conversation(
-    conversation: ResponseInputParam,
-) -> ResponseInputParam:
-    """
-    Purge the reasoning content from the conversation
-    """
-    messages = deepcopy(conversation)
-    for message in messages:
-        for key in list(message.keys()):
-            if key not in ["content", "role"]:
-                del message[key]
-    return messages
-
-
 @retry(
     wait=wait_random_exponential(min=1, max=60),
     stop=stop_after_attempt(6),
@@ -50,13 +34,14 @@ def _purge_conversation(
     after=after_log(logger, logging.WARNING),
     reraise=True,
 )
-async def _query_llm(messages: ResponseInputParam):
+async def _query_llm(conversation: Conversation) -> Conversation:
     logger.info("Preparing to query LLM")
-    logger.debug(f"Messages: {messages}")
+    logger.debug(f"Messages: {conversation}")
 
+    conversation = conversation.messages_copy()
     response = await client.responses.create(
         model=config.openai_model,
-        input=messages,
+        input=conversation.dump_response_input(),
         timeout=240,
         stream=False,
         reasoning={
@@ -74,18 +59,18 @@ async def _query_llm(messages: ResponseInputParam):
     logger.debug(f"Content: {content}")
     logger.debug(f"Token usage: {token_usage}")
 
-    messages.append(
-        EasyInputMessageParam(
+    conversation.append(
+        Message(
             content=content,
-            role="assistant",
+            role=Role.ASSISTANT,
         )
     )
 
-    return messages
+    return conversation
 
 
 async def _query_llm_with_retry(
-    messages: ResponseInputParam,
+    conversation: Conversation,
     retry_times: int,
     validate_func: Callable[[str], bool],
 ):
@@ -93,33 +78,33 @@ async def _query_llm_with_retry(
 
     for times in range(retry_times):
         logger.info(f"Retry {times + 1} / {retry_times}")
-        conversation = await _query_llm(messages)
-        content = conversation[-1]["content"]
+        new_conversation = await _query_llm(conversation)
+        content = new_conversation.messages[-1].content
 
         if validate_func(content):
             logger.info("Get valid response from LLM")
-            return conversation
+            return new_conversation
 
         logger.error(f"Get unexpected response from LLM: {content}")
 
     raise UnExpectedResponseException("Invalid response from LLM")
 
 
-def _save_conversation(conversation: ResponseInputParam, base_dir: Path, name: str):
+def _save_conversation(conversation: Conversation, base_dir: Path, name: str):
     dir = base_dir / "conversation"
     dir.mkdir(parents=True, exist_ok=True)
     logger.info(f"Saving conversation to {dir}")
 
     with open(dir / f"{name}.json", "w") as f:
-        json.dump(conversation, f, indent=4)
+        json.dump(conversation.model_dump(), f, indent=4)
     with open(dir / f"{name}.md", "w") as f:
-        for message in conversation:
-            f.write(f"## {message['role']}\n")
+        for message in conversation.messages:
+            f.write(f"## {message.role}\n")
             f.write("Content:\n")
-            f.write(f"````text\n{message['content']}\n````\n")
-            if "reasoning_content" in message:
+            f.write(f"````text\n{message.content}\n````\n")
+            if message.reasoning_content:
                 f.write("Reasoning_content:\n")
-                f.write(f"````text\n{message['reasoning_content']}\n````\n")
+                f.write(f"````text\n{message.reasoning_content}\n````\n")
 
 
 def _save_retained_candidates(candidates: list[Candidate], dir: Path):
@@ -137,10 +122,10 @@ def _save_retained_candidates(candidates: list[Candidate], dir: Path):
 async def _query_base_candidates(
     report_info: ReportInfo,
     constraint: str | None = None,
-) -> tuple[list[Candidate], ResponseInputParam]:
+) -> tuple[list[Candidate], Conversation]:
     logger.info(f"Starting base candidate query for {report_info.apk_name}")
 
-    messages = Prompt.base_filter_candidate_prompt(report_info, constraint)
+    conversation = Prompt.base_filter_candidate_prompt(report_info, constraint)
 
     retained_candidates = []
     for index, candidate in enumerate(report_info.base_candidates):
@@ -149,33 +134,33 @@ async def _query_base_candidates(
         )
         logger.info(f"Candidate: {candidate.name}")
 
-        messages.append(
-            EasyInputMessageParam(
+        conversation.append(
+            Message(
                 content=Prompt.FILTER_CANDIDATE_METHOD(report_info, candidate),
-                role="user",
+                role=Role.USER,
             )
         )
-        messages = await _query_llm_with_retry(
-            messages,
+        conversation = await _query_llm_with_retry(
+            conversation,
             3,
             lambda x: ("Yes" in x and "No" not in x) or ("No" in x and "Yes" not in x),
         )
 
-        if "Yes" in messages[-1]["content"]:
+        if "Yes" in conversation.messages[-1].content:
             retained_candidates.append(candidate)
 
     _save_conversation(
-        messages,
+        conversation,
         config.result_report_filter_dir(report_info.apk_name),
         "base_candidates",
     )
-    return retained_candidates, messages
+    return retained_candidates, conversation
 
 
 async def _query_extra_candidates(
     report_info: ReportInfo,
     retained_candidates: list[Candidate],
-    base_messages: ResponseInputParam,
+    base_messages: Conversation,
 ) -> list[Candidate]:
     logger.info(f"Starting extra candidate query for {report_info.apk_name}")
 
@@ -184,22 +169,22 @@ async def _query_extra_candidates(
             f"Querying extra candidate {index + 1} / {len(report_info.extra_candidates)}"
         )
         logger.info(f"Candidate: {candidate.name}")
-        messages = base_messages.copy()
-        messages.append(
-            EasyInputMessageParam(
+        conversation = base_messages.messages_copy()
+        conversation.append(
+            Message(
                 content=Prompt.FILTER_CANDIDATE_METHOD(report_info, candidate),
-                role="user",
+                role=Role.USER,
             )
         )
-        messages = await _query_llm_with_retry(
-            messages,
+        conversation = await _query_llm_with_retry(
+            conversation,
             3,
             lambda x: ("Yes" in x and "No" not in x) or ("No" in x and "Yes" not in x),
         )
-        if "Yes" in messages[-1]["content"]:
+        if "Yes" in conversation.messages[-1].content:
             retained_candidates.append(candidate)
         _save_conversation(
-            messages,
+            conversation,
             config.result_report_filter_dir(report_info.apk_name),
             f"extra_candidates_{index + 1}",
         )
@@ -246,21 +231,21 @@ async def _extract_constraint(
     report_info: ReportInfo,
 ) -> str:
     code = get_framework_code(method, report_info.android_version)
-    messages = Prompt.base_extractor_prompt()
-    messages.append(
-        EasyInputMessageParam(
+    conversation = Prompt.base_extractor_prompt()
+    conversation.append(
+        Message(
             content=Prompt.EXTRACTOR_USER_PROMPT(
                 code,
                 method.full_class_name(),
                 report_info.exception_type,
                 report_info.crash_message,
             ),
-            role="user",
+            role=Role.USER,
         )
     )
 
     conversation = await _query_llm_with_retry(
-        messages,
+        conversation,
         3,
         lambda x: _constraint_parser(x) is not None,
     )
@@ -274,31 +259,31 @@ async def _extract_constraint(
 
 async def _infer_constraint(
     method: MethodSignature,
-    messages: ResponseInputParam,
+    conversation: Conversation,
     original_constraint: str,
     report_info: ReportInfo,
 ) -> str:
     code = get_framework_code(method, report_info.android_version)
-    messages.append(
-        EasyInputMessageParam(
+    conversation.append(
+        Message(
             content=Prompt.INFERRER_USER_PROMPT(
                 code,
                 method.full_class_name(),
                 original_constraint,
             ),
-            role="user",
+            role=Role.USER,
         )
     )
 
     conversation = await _query_llm_with_retry(
-        messages, 3, lambda x: _constraint_parser(x) is not None
+        conversation, 3, lambda x: _constraint_parser(x) is not None
     )
     _save_conversation(
         conversation,
         config.result_report_constraint_dir(report_info.apk_name),
         "infer_constraint",
     )
-    return _constraint_parser(conversation[-1]["content"])
+    return _constraint_parser(conversation.messages[-1].content)
 
 
 async def query_filter_candidate_with_constraint(

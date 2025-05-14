@@ -1,8 +1,7 @@
 from crash_locator.my_types import ReportInfo, Candidate
 from crash_locator.utils.java_parser import get_application_code
-from openai.types.responses.response_input_param import ResponseInputParam
-from openai.types.responses.easy_input_message_param import EasyInputMessageParam
 from crash_locator.my_types import ReasonTypeLiteral
+from crash_locator.types.llm import Conversation, Message, Role
 
 new_line = "\n"
 
@@ -79,16 +78,18 @@ Android Version:
     def base_filter_candidate_prompt(
         report_info: ReportInfo,
         constraint: str | None = None,
-    ) -> ResponseInputParam:
-        return [
-            EasyInputMessageParam(
-                content=Prompt.FILTER_CANDIDATE_SYSTEM(constraint), role="system"
-            ),
-            EasyInputMessageParam(
-                content=Prompt.FILTER_CANDIDATE_CRASH(report_info, constraint),
-                role="user",
-            ),
-        ]
+    ) -> Conversation:
+        return Conversation(
+            messages=[
+                Message(
+                    content=Prompt.FILTER_CANDIDATE_SYSTEM(constraint), role=Role.SYSTEM
+                ),
+                Message(
+                    content=Prompt.FILTER_CANDIDATE_CRASH(report_info, constraint),
+                    role=Role.USER,
+                ),
+            ]
+        )
 
     @staticmethod
     def FILTER_CANDIDATE_METHOD(report_info: ReportInfo, candidate: Candidate) -> str:
@@ -182,12 +183,12 @@ Exception Message: {crash_message}
 """
 
     @staticmethod
-    def base_extractor_prompt() -> ResponseInputParam:
-        return [
-            EasyInputMessageParam(
-                content=Prompt.EXTRACTOR_SYSTEM_PROMPT, role="system"
-            ),
-        ]
+    def base_extractor_prompt() -> Conversation:
+        return Conversation(
+            messages=[
+                Message(content=Prompt.EXTRACTOR_SYSTEM_PROMPT, role=Role.SYSTEM),
+            ]
+        )
 
     INFERRER_SYSTEM_PROMPT: str = """
 You are an Android expert that assist with inferring the triggering constraint of the target exception in Java methods
@@ -265,7 +266,9 @@ Original_Constraint: ```
 """
 
     @staticmethod
-    def base_inferrer_prompt() -> ResponseInputParam:
-        return [
-            EasyInputMessageParam(content=Prompt.INFERRER_SYSTEM_PROMPT, role="system"),
-        ]
+    def base_inferrer_prompt() -> Conversation:
+        return Conversation(
+            messages=[
+                Message(content=Prompt.INFERRER_SYSTEM_PROMPT, role=Role.SYSTEM),
+            ]
+        )
