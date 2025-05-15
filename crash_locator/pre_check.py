@@ -42,6 +42,7 @@ from crash_locator.utils.helper import get_method_type
 from crash_locator.utils.java_parser import get_application_code, get_framework_code
 
 logger = logging.getLogger()
+statistic = PreCheckStatistic()
 
 
 def _get_android_version(report: dict) -> str:
@@ -418,6 +419,40 @@ def _check_framework_code_exist(report: ReportInfo) -> None:
             raise FrameworkCodeNotFoundException(method, str(e))
 
 
+def _fix_candidate_signature(report: ReportInfo) -> None:
+    """
+    Fix the candidate signature due to CrashTracker candidate signature error.
+    """
+    for candidate in report.candidates:
+        if candidate.reasons.reason_type == ReasonTypeLiteral.KEY_VAR_TERMINAL:
+            target_method = None
+            duplicate_method = False
+            for method, method_short_api in zip(
+                report.stack_trace, report.stack_trace_short_api
+            ):
+                sig: MethodSignature = MethodSignature.from_str(method)
+                if method_short_api == candidate.name and sig != candidate.signature:
+                    if target_method is None:
+                        target_method = method
+                    else:
+                        duplicate_method = True
+                        statistic.fixed_failed_duplicate += 1
+                        break
+
+            if target_method is not None and not duplicate_method:
+                statistic.fixed_reports += 1
+                if report.apk_name not in statistic.fixed_reports_detail:
+                    statistic.fixed_reports_detail[report.apk_name] = []
+                statistic.fixed_reports_detail[report.apk_name].append(
+                    {
+                        "before": str(candidate.signature),
+                        "after": str(MethodSignature.from_str(target_method)),
+                    }
+                )
+
+                candidate.signature = MethodSignature.from_str(target_method)
+
+
 def pre_check(crash_report_path: Path) -> ReportInfo:
     report = json.load(open(crash_report_path, "r"))
 
@@ -478,6 +513,7 @@ def pre_check(crash_report_path: Path) -> ReportInfo:
     _check_candidate_code_exist(report_info)
     _check_framework_code_exist(report_info)
     _check_buggy_method_candidates_exist(report_info)
+    _fix_candidate_signature(report_info)
 
     return report_info
 
@@ -516,7 +552,6 @@ def _save_report(report_name: str, report_info: ReportInfo) -> None:
 def main():
     setup_logging(config.pre_check_dir)
 
-    statistic = PreCheckStatistic()
     work_list = config.crash_reports_dir.iterdir()
     if config.debug:
         work_list = [

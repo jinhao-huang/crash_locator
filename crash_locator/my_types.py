@@ -15,6 +15,10 @@ class PreCheckStatistic(BaseModel):
     invalid_reports: int = 0
     invalid_report_exceptions: dict[str, int] = Field(default_factory=dict)
     invalid_reports_detail: dict[str, str] = Field(default_factory=dict)
+    # Fixed due to CrashTracker candidate signature error
+    fixed_failed_duplicate: int = 0
+    fixed_reports: int = 0
+    fixed_reports_detail: dict[str, list[dict[str, str]]] = Field(default_factory=dict)
     candidates_nums_distribution: dict[int, int] = Field(default_factory=dict)
 
 
