@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 from enum import Enum, StrEnum
 from typing import Self
+from crash_locator.types.llm import TokenUsage
 
 
 class PreCheckStatistic(BaseModel):
@@ -56,16 +57,6 @@ FinishedReport = Annotated[
 
 
 class RunStatistic(BaseModel):
-    class TokenUsage(BaseModel):
-        input_tokens: int = 0
-        output_tokens: int = 0
-
-        def __add__(self, other: Self) -> Self:
-            return self.__class__(
-                input_tokens=self.input_tokens + other.input_tokens,
-                output_tokens=self.output_tokens + other.output_tokens,
-            )
-
     class ModelInfo(BaseModel):
         model_name: str
 

@@ -1,11 +1,18 @@
 from openai import AsyncOpenAI
 from openai import RateLimitError, InternalServerError, APIConnectionError
 from crash_locator.config import config, run_statistic
-from crash_locator.my_types import ReportInfo, Candidate, RunStatistic, MethodSignature
+from crash_locator.my_types import ReportInfo, Candidate, MethodSignature
 from crash_locator.prompt import Prompt
 from crash_locator.exceptions import UnExpectedResponseException
 from crash_locator.utils.java_parser import get_framework_code
-from crash_locator.types.llm import Conversation, Message, Role
+from crash_locator.types.llm import (
+    Conversation,
+    Message,
+    Role,
+    APIType,
+    Response,
+    TokenUsage,
+)
 from typing import Callable
 import json
 from pathlib import Path
@@ -24,21 +31,7 @@ logger = logging.getLogger(__name__)
 client = AsyncOpenAI(base_url=config.openai_base_url, api_key=config.openai_api_key)
 
 
-@retry(
-    wait=wait_random_exponential(min=1, max=60),
-    stop=stop_after_attempt(6),
-    retry=retry_if_exception_type(
-        (RateLimitError, InternalServerError, APIConnectionError)
-    ),
-    before=before_log(logger, logging.WARNING),
-    after=after_log(logger, logging.WARNING),
-    reraise=True,
-)
-async def _query_llm(conversation: Conversation) -> Conversation:
-    logger.info("Preparing to query LLM")
-    logger.debug(f"Messages: {conversation}")
-
-    conversation = conversation.messages_copy()
+async def _query_response_api(conversation: Conversation) -> Response:
     response = await client.responses.create(
         model=config.openai_model,
         input=conversation.dump_response_input(),
@@ -50,10 +43,38 @@ async def _query_llm(conversation: Conversation) -> Conversation:
     )
 
     content = response.output_text
-    token_usage = RunStatistic.TokenUsage(
+    token_usage = TokenUsage(
         input_tokens=response.usage.input_tokens,
         output_tokens=response.usage.output_tokens,
     )
+    return Response(content=content, token_usage=token_usage)
+
+
+@retry(
+    wait=wait_random_exponential(min=1, max=60),
+    stop=stop_after_attempt(6),
+    retry=retry_if_exception_type(
+        (RateLimitError, InternalServerError, APIConnectionError)
+    ),
+    before=before_log(logger, logging.INFO),
+    after=after_log(logger, logging.INFO),
+    reraise=True,
+)
+async def _query_llm(conversation: Conversation) -> Conversation:
+    logger.info("Preparing to query LLM")
+    logger.debug(f"Messages: {conversation}")
+
+    conversation = conversation.messages_copy()
+    match config.openai_api_type:
+        case APIType.RESPONSE:
+            response = await _query_response_api(conversation)
+        case APIType.COMPLETION:
+            raise NotImplementedError("Completion API is not implemented")
+        case _:
+            raise ValueError(f"Invalid API type: {config.openai_api_type}")
+
+    content = response.content
+    token_usage = response.token_usage
     run_statistic.add_token_usage(token_usage)
     logger.info("LLM query completed")
     logger.debug(f"Content: {content}")
