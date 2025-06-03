@@ -32,9 +32,12 @@ client = AsyncOpenAI(base_url=config.openai_base_url, api_key=config.openai_api_
 
 
 async def _query_response_api(conversation: Conversation) -> Response:
+    from openai.types.responses.response_input_param import ResponseInputParam
+
+    input: ResponseInputParam = conversation.dump_messages()
     response = await client.responses.create(
         model=config.openai_model,
-        input=conversation.dump_response_input(),
+        input=input,
         timeout=240,
         stream=False,
         reasoning={
@@ -48,6 +51,32 @@ async def _query_response_api(conversation: Conversation) -> Response:
         output_tokens=response.usage.output_tokens,
     )
     return Response(content=content, token_usage=token_usage)
+
+
+async def _query_completion_api(conversation: Conversation) -> Response:
+    from openai.types.chat import ChatCompletionMessageParam
+
+    messages: list[ChatCompletionMessageParam] = conversation.dump_messages()
+    response = await client.chat.completions.create(
+        model=config.openai_model,
+        messages=messages,
+        timeout=240,
+        stream=False,
+    )
+
+    content = response.choices[0].message.content
+    reasoning_content = None
+    if "reasoning_content" in response.choices[0].message.model_extra:
+        reasoning_content = response.choices[0].message.model_extra["reasoning_content"]
+    token_usage = TokenUsage(
+        input_tokens=response.usage.prompt_tokens,
+        output_tokens=response.usage.completion_tokens,
+    )
+    return Response(
+        content=content,
+        token_usage=token_usage,
+        reasoning_content=reasoning_content,
+    )
 
 
 @retry(
@@ -67,14 +96,17 @@ async def _query_llm(conversation: Conversation) -> Conversation:
     conversation = conversation.messages_copy()
     match config.openai_api_type:
         case APIType.RESPONSE:
+            logger.info("Using response API")
             response = await _query_response_api(conversation)
         case APIType.COMPLETION:
-            raise NotImplementedError("Completion API is not implemented")
+            logger.info("Using completion API")
+            response = await _query_completion_api(conversation)
         case _:
             raise ValueError(f"Invalid API type: {config.openai_api_type}")
 
     content = response.content
     token_usage = response.token_usage
+    reasoning_content = response.reasoning_content
     run_statistic.add_token_usage(token_usage)
     logger.info("LLM query completed")
     logger.debug(f"Content: {content}")
@@ -84,6 +116,7 @@ async def _query_llm(conversation: Conversation) -> Conversation:
         Message(
             content=content,
             role=Role.ASSISTANT,
+            reasoning_content=reasoning_content,
         )
     )
 
@@ -275,7 +308,7 @@ async def _extract_constraint(
         config.result_report_constraint_dir(report_info.apk_name),
         "extract_constraint",
     )
-    return _constraint_parser(conversation[-1]["content"])
+    return _constraint_parser(conversation[-1].content)
 
 
 async def _infer_constraint(

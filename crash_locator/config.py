@@ -2,6 +2,7 @@ from pathlib import Path
 import json
 from datetime import datetime
 import logging.config
+from crash_locator.types.llm import APIType
 from crash_locator.my_types import RunStatistic
 import asyncio
 import logging
@@ -30,6 +31,7 @@ class Config(BaseSettings):
     openai_base_url: str
     openai_api_key: str
     openai_model: str
+    openai_api_type: APIType = APIType.RESPONSE
 
     # Pre_check directory
     @property

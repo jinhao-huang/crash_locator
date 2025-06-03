@@ -1,7 +1,5 @@
 from enum import StrEnum
 from pydantic import BaseModel
-from openai.types.responses.response_input_param import ResponseInputParam
-from openai.types.responses.easy_input_message_param import EasyInputMessageParam
 from typing import Self
 
 
@@ -26,15 +24,17 @@ class Conversation(BaseModel):
     def messages_copy(self) -> "Conversation":
         return Conversation(messages=self.messages.copy())
 
-    def dump_response_input(self) -> ResponseInputParam:
-        messages = [
-            EasyInputMessageParam(
-                content=message.content,
-                role=message.role,
-            )
+    def dump_messages(self) -> list[dict]:
+        return [
+            {
+                "role": message.role,
+                "content": message.content,
+            }
             for message in self.messages
         ]
-        return messages
+
+    def __getitem__(self, index: int) -> Message:
+        return self.messages[index]
 
 
 class APIType(StrEnum):
