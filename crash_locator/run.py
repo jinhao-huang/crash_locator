@@ -7,6 +7,7 @@ from crash_locator.config import (
     run_statistic,
 )
 from crash_locator.my_types import (
+    ReasonTypeLiteral,
     ReportInfo,
     RunStatistic,
     Candidate,
@@ -200,7 +201,8 @@ async def run():
                 desc="Processing reports",
             ):
                 await task
-        logger.info(f"Statistic: {run_statistic}")
+        logger.info("All tasks finished")
+        logger.debug(f"Statistic: {run_statistic}")
     except asyncio.CancelledError:
         logger.info("Received CancelledError signal, program will exit")
         for task in tasks:
