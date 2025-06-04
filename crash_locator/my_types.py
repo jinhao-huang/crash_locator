@@ -20,7 +20,12 @@ class PreCheckStatistic(BaseModel):
     fixed_failed_duplicate: int = 0
     fixed_reports: int = 0
     fixed_reports_detail: dict[str, list[dict[str, str]]] = Field(default_factory=dict)
-    candidates_nums_distribution: dict[int, int] = Field(default_factory=dict)
+    # Valid reports candidates nums distribution
+    valid_reports_candidate_nums_distribution: dict[int, int] = Field(
+        default_factory=dict
+    )
+    # Valid reports candidates reason type distribution
+    valid_reports_reason_type_distribution: dict[str, int] = Field(default_factory=dict)
 
 
 class ReportStatus(StrEnum):

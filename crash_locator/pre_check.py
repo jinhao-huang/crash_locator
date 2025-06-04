@@ -519,9 +519,24 @@ def pre_check(crash_report_path: Path) -> ReportInfo:
 
 
 def _successful_statistic(report: ReportInfo, statistic: PreCheckStatistic):
-    if len(report.candidates) not in statistic.candidates_nums_distribution:
-        statistic.candidates_nums_distribution[len(report.candidates)] = 0
-    statistic.candidates_nums_distribution[len(report.candidates)] += 1
+    if (
+        len(report.candidates)
+        not in statistic.valid_reports_candidate_nums_distribution
+    ):
+        statistic.valid_reports_candidate_nums_distribution[len(report.candidates)] = 0
+    statistic.valid_reports_candidate_nums_distribution[len(report.candidates)] += 1
+
+    for candidate in report.candidates:
+        if (
+            candidate.reasons.reason_type
+            not in statistic.valid_reports_reason_type_distribution
+        ):
+            statistic.valid_reports_reason_type_distribution[
+                candidate.reasons.reason_type
+            ] = 0
+        statistic.valid_reports_reason_type_distribution[
+            candidate.reasons.reason_type
+        ] += 1
 
     statistic.valid_reports += 1
 
