@@ -43,6 +43,8 @@ You will be given a crash report first, then you need to analyze the crash repor
 
 Then, we will give you a candidate method at a time, and you need to analyze whether the candidate method is related to the crash.
 
+// Note: You need to be aware that errors may be related to multiple aspects, such as for the 'service is null' error, it could be due to the creation method not successfully creating it, or it might have been modified by other methods leading to premature release.
+
 For those candidate methods that are most likely to be related to the crash, you just reply "Yes"(Usually the numbers "Yes" is less than 3), otherwise you reply "No" without any additional text.
 """
 
