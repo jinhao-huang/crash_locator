@@ -25,6 +25,7 @@ from tenacity import (
     after_log,
 )
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -66,8 +67,21 @@ async def _query_completion_api(conversation: Conversation) -> Response:
 
     content = response.choices[0].message.content
     reasoning_content = None
+
+    # Check if reasoning content is in model_extra
     if "reasoning_content" in response.choices[0].message.model_extra:
         reasoning_content = response.choices[0].message.model_extra["reasoning_content"]
+
+    # Check if reasoning content is wrapped in <think> tags within content
+    if reasoning_content is None and content:
+        think_pattern = r"<think>(.*?)</think>"
+        think_matches = re.findall(think_pattern, content, re.DOTALL)
+        if think_matches:
+            # Extract the reasoning content from think tags
+            reasoning_content = "\n".join(think_matches)
+            # Remove think tags from the main content
+            content = re.sub(think_pattern, "", content, flags=re.DOTALL).strip()
+
     token_usage = TokenUsage(
         input_tokens=response.usage.prompt_tokens,
         output_tokens=response.usage.completion_tokens,
