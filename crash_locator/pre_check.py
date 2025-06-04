@@ -509,11 +509,11 @@ def pre_check(crash_report_path: Path) -> ReportInfo:
         ),
     )
 
+    _fix_candidate_signature(report_info)
     _remove_useless_candidates(report_info)
     _check_candidate_code_exist(report_info)
     _check_framework_code_exist(report_info)
     _check_buggy_method_candidates_exist(report_info)
-    _fix_candidate_signature(report_info)
 
     return report_info
 
