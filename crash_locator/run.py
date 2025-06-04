@@ -82,6 +82,33 @@ class TaskAdapter(logging.LoggerAdapter):
         return f"[Task {self.extra['task_name']}] {msg}", kwargs
 
 
+def _candidate_correction(
+    report_info: ReportInfo, retained_candidates: list[Candidate]
+) -> None:
+    for candidate in report_info.candidates:
+        if candidate in retained_candidates:
+            continue
+
+        keep_flag = False
+        if candidate.signature.method_name in [
+            "onStart",
+            "onDestroy",
+            "onCreate",
+            "onPause",
+            "onResume",
+        ]:
+            keep_flag = True
+
+        if candidate.reasons.reason_type in [
+            ReasonTypeLiteral.NOT_OVERRIDE_METHOD,
+            ReasonTypeLiteral.KEY_VAR_3,
+        ]:
+            keep_flag = True
+
+        if keep_flag:
+            retained_candidates.append(candidate)
+
+
 async def _process_report(
     pre_check_report_dir: Path,
     statistic: RunStatistic,
@@ -117,6 +144,8 @@ async def _process_report(
             else:
                 logger.info("Disable constraint extraction")
                 retained_candidates = await query_filter_candidate(report_info)
+
+            _candidate_correction(report_info, retained_candidates)
 
         except asyncio.CancelledError:
             logger.info(f"Task {task_name} cancelled")
