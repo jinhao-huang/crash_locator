@@ -144,8 +144,13 @@ async def _query_llm_with_retry(
 ):
     logger.info(f"Query LLM with retry {retry_times} times")
 
-    for times in range(retry_times):
-        logger.info(f"Retry {times + 1} / {retry_times}")
+    first_times = True
+    for times in range(retry_times + 1):
+        if not first_times:
+            logger.info(f"Retry {times} / {retry_times}")
+        else:
+            first_times = False
+
         new_conversation = await _query_llm(conversation)
         content = new_conversation.messages[-1].content
 
