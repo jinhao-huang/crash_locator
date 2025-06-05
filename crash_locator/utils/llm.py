@@ -42,9 +42,10 @@ async def _query_response_api(conversation: Conversation) -> Response:
         timeout=240,
         stream=False,
         reasoning={
-            "effort": "medium",
+            "effort": config.reasoning_effort.value,
         },
     )
+    logger.debug(f"Raw response: {response}")
 
     content = response.output_text
     token_usage = TokenUsage(
@@ -63,7 +64,9 @@ async def _query_completion_api(conversation: Conversation) -> Response:
         messages=messages,
         timeout=240,
         stream=False,
+        reasoning_effort=config.reasoning_effort.value,
     )
+    logger.debug(f"Raw response: {response}")
 
     content = response.choices[0].message.content
     reasoning_content = None

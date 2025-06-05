@@ -2,7 +2,7 @@ from pathlib import Path
 import json
 from datetime import datetime
 import logging.config
-from crash_locator.types.llm import APIType
+from crash_locator.types.llm import APIType, ReasoningEffort
 from crash_locator.my_types import RunStatistic
 import asyncio
 import logging
@@ -23,6 +23,7 @@ class Config(BaseSettings):
     enable_notes: bool
     enable_candidate_reason: bool
     enable_candidate_correction: bool
+    reasoning_effort: ReasoningEffort
 
     root_dir: Path = Path(__file__).parent.parent
 
@@ -132,12 +133,14 @@ class Config(BaseSettings):
                 "enable_notes": False,
                 "enable_candidate_reason": False,
                 "enable_candidate_correction": False,
+                "reasoning_effort": ReasoningEffort.MEDIUM,
             },
             "full": {
                 "enable_extract_constraint": True,
                 "enable_notes": True,
                 "enable_candidate_reason": True,
                 "enable_candidate_correction": True,
+                "reasoning_effort": ReasoningEffort.MEDIUM,
             },
         }
 
@@ -274,8 +277,16 @@ def init_statistic() -> RunStatistic:
             run_statistic = RunStatistic(**json.load(f))
     else:
         run_statistic = RunStatistic(
-            model_info=RunStatistic.ModelInfo(
-                model_name=config.openai_model,
+            config=RunStatistic.RunConfig(
+                preset=config.preset,
+                enable_extract_constraint=config.enable_extract_constraint,
+                enable_notes=config.enable_notes,
+                enable_candidate_reason=config.enable_candidate_reason,
+                enable_candidate_correction=config.enable_candidate_correction,
+                model_info=RunStatistic.RunConfig.ModelInfo(
+                    model_name=config.openai_model,
+                    reasoning_effort=config.reasoning_effort,
+                ),
             ),
         )
     run_statistic.set_path(config.result_statistic_path)

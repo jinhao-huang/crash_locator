@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 from enum import Enum, StrEnum
 from typing import Self
-from crash_locator.types.llm import TokenUsage
+from crash_locator.types.llm import TokenUsage, ReasoningEffort
 
 
 class PreCheckStatistic(BaseModel):
@@ -62,8 +62,17 @@ FinishedReport = Annotated[
 
 
 class RunStatistic(BaseModel):
-    class ModelInfo(BaseModel):
-        model_name: str
+    class RunConfig(BaseModel):
+        class ModelInfo(BaseModel):
+            model_name: str
+            reasoning_effort: ReasoningEffort
+
+        preset: str | None
+        enable_extract_constraint: bool
+        enable_notes: bool
+        enable_candidate_reason: bool
+        enable_candidate_correction: bool
+        model_info: ModelInfo
 
     # Processed reports after filtering
     processed_reports: int = 0
@@ -83,7 +92,7 @@ class RunStatistic(BaseModel):
     failed_reports: int = 0
 
     token_usage: TokenUsage = TokenUsage()
-    model_info: ModelInfo
+    config: RunConfig
 
     finished_reports_detail: dict[str, FinishedReport] = Field(
         default_factory=dict,

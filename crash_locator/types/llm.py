@@ -57,3 +57,9 @@ class Response(BaseModel):
     content: str
     reasoning_content: str | None = None
     token_usage: TokenUsage
+
+
+class ReasoningEffort(StrEnum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
