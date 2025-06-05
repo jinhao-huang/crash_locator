@@ -526,7 +526,7 @@ def _successful_statistic(report: ReportInfo, statistic: PreCheckStatistic):
         statistic.valid_reports_candidate_nums_distribution[len(report.candidates)] = 0
     statistic.valid_reports_candidate_nums_distribution[len(report.candidates)] += 1
 
-    for candidate in report.candidates:
+    for index, candidate in enumerate(report.candidates):
         if (
             candidate.reasons.reason_type
             not in statistic.valid_reports_reason_type_distribution
@@ -537,6 +537,14 @@ def _successful_statistic(report: ReportInfo, statistic: PreCheckStatistic):
         statistic.valid_reports_reason_type_distribution[
             candidate.reasons.reason_type
         ] += 1
+
+        if candidate.signature == report.buggy_method:
+            rank = index + 1
+            if len(report.candidates) == 1:
+                continue
+            if rank not in statistic.valid_reports_buggy_candidate_rank_distribution:
+                statistic.valid_reports_buggy_candidate_rank_distribution[rank] = 0
+            statistic.valid_reports_buggy_candidate_rank_distribution[rank] += 1
 
     statistic.valid_reports += 1
 

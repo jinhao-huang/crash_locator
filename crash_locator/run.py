@@ -86,7 +86,7 @@ class TaskAdapter(logging.LoggerAdapter):
 def _candidate_correction(
     report_info: ReportInfo, retained_candidates: list[Candidate]
 ) -> None:
-    for candidate in report_info.candidates:
+    for index, candidate in enumerate(report_info.candidates):
         if candidate in retained_candidates:
             continue
 
@@ -104,6 +104,9 @@ def _candidate_correction(
             ReasonTypeLiteral.NOT_OVERRIDE_METHOD,
             ReasonTypeLiteral.KEY_VAR_3,
         ]:
+            keep_flag = True
+
+        if index == 0:
             keep_flag = True
 
         if keep_flag:

@@ -50,9 +50,9 @@ class Prompt:
         )
 
         response_prompt = (
-            "For those candidate methods that are most likely to be related to the crash, you just reply 'Yes'(Usually the numbers 'Yes' is less than 3), otherwise you reply 'No' without any additional text."
+            "For those candidate methods that likely to be related to the crash, you just reply 'Yes.'(Usually the numbers 'Yes' is less than 3) at the beginning, otherwise you reply 'No.', followed by a concise reason explanation of no more than two sentences after the period."
             if config.enable_notes
-            else "For those candidate methods that likely to be related to the crash, you just reply 'Yes', otherwise you reply 'No' without any additional text."
+            else "For those candidate methods that are most likely to be related to the crash, you just reply 'Yes', otherwise you reply 'No' without any additional text."
         )
 
         prompts = [
@@ -77,7 +77,7 @@ class Prompt:
 
             Stack Trace:
             ```
-            {report_info.stack_trace}
+            {new_line.join(report_info.stack_trace)}
             ```
 
             Exception Type:
@@ -122,6 +122,10 @@ class Prompt:
 
         if config.enable_candidate_reason:
             parts.append(Prompt.Part.candidate_reason(candidate))
+
+        parts.append(
+            "// Note: You only need to reply whether this candidate is related to the crash, there is no need to repeat the results of previous candidates."
+        )
         return Prompt.Part.merger(parts)
 
     EXTRACTOR_SYSTEM_PROMPT: str = dedent("""\
@@ -154,6 +158,7 @@ class Prompt:
 
         // Note: The constraint should not include other method, You should describe the specific effects of other methods in the constraints.
         // Note: The content of this section is the final result; this section should be independent, and you cannot reference content from other sections.
+        // Note: Please pay attention to the readability of the constraint, except for maintaining a specific format, the overall constraint should be concise and readable, and it is not necessary to have a very formal constraint, but it should be able to accurately describe the crash.
         ```
         """)
 
@@ -244,6 +249,7 @@ class Prompt:
 
         // Note: The constraint should not include other method, You should describe the specific effects of other methods in the constraints.
         // Note: The content of this section is the final result; this section should be independent, and you cannot reference content from other sections.
+        // Note: Please pay attention to the readability of the constraint, except for maintaining a specific format, the overall constraint should be concise and readable, and it is not necessary to have a very formal constraint, but it should be able to accurately describe the crash.
         ``` 
         """)
 

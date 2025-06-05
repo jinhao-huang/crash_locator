@@ -7,6 +7,7 @@ from pathlib import Path
 from enum import Enum, StrEnum
 from typing import Self
 from crash_locator.types.llm import TokenUsage, ReasoningEffort
+from textwrap import dedent
 
 
 class PreCheckStatistic(BaseModel):
@@ -26,6 +27,10 @@ class PreCheckStatistic(BaseModel):
     )
     # Valid reports candidates reason type distribution
     valid_reports_reason_type_distribution: dict[str, int] = Field(default_factory=dict)
+    # Valid reports buggy candidate rank distribution
+    valid_reports_buggy_candidate_rank_distribution: dict[int, int] = Field(
+        default_factory=dict
+    )
 
 
 class ReportStatus(StrEnum):
@@ -348,11 +353,11 @@ class KeyVarTerminalReason(CandidateReason):
     terminal_api: str
 
     def reason_explanation(self) -> str:
-        return f"""
-Our static analysis tool detect that some buggy parameter value is passed to `{self.framework_entry_api}` by call chain {self.call_chain_to_entry}.
+        return dedent(f"""\
+            Our static analysis tool detect that some buggy parameter value is passed to `{self.framework_entry_api}` by call chain {self.call_chain_to_entry}.
 
-The buggy parameter meet the crash constraint which was described in `Constraint` part
-"""
+            You can verify whether this method can indeed pass these incorrect parameters to the framework layer. If so, this method is likely related to the crash.
+            """)
 
 
 class KeyVarNonTerminalReason(CandidateReason):
@@ -364,11 +369,11 @@ class KeyVarNonTerminalReason(CandidateReason):
     terminal_api: str
 
     def reason_explanation(self) -> str:
-        return f"""
-Our static analysis tool detect that the method invoke `{self.terminal_api}` by call chain {self.call_chain_to_terminal}.
+        return dedent(f"""\
+            Our static analysis tool detect that the method invoke `{self.terminal_api}` by call chain {self.call_chain_to_terminal}.
 
-`{self.terminal_api}` method pass buggy parameter to `{self.framework_entry_api}`
-"""
+            `{self.terminal_api}` method pass buggy parameter to `{self.framework_entry_api}`
+            """)
 
 
 class KeyApiInvokedReason(CandidateReason):
@@ -379,11 +384,11 @@ class KeyApiInvokedReason(CandidateReason):
     key_field: list[str]
 
     def reason_explanation(self) -> str:
-        return f"""
-We detect that the method `{self.key_api}` is invoked in the method.
+        return dedent(f"""\
+            We detect that the method `{self.key_api}` which is invoked before the crash can affect the `{self.key_field}` field in Android Framework so that cause constraint violation.
 
-The method can affect the `{self.key_field}` field in Android Framework so that cause constraint violation.
-"""
+            You can verify whether this method calls the corresponding API and affects the crash-related fields, thereby causing a crash to occur. If so, this method is likely related to the crash.
+            """)
 
 
 class KeyApiExecutedReason(CandidateReason):
@@ -392,9 +397,11 @@ class KeyApiExecutedReason(CandidateReason):
     )
 
     def reason_explanation(self) -> str:
-        return """
-This method was detected because it was executed during the process of the application crashing.
-"""
+        return dedent("""\
+            This method was detected because it was executed during the process of the application crashing.
+
+            You can check if there are other forms of this method that may affect the crash, and if not, this method may not be very related to the crash.
+            """)
 
 
 class KeyVarModifiedFieldReason(CandidateReason):
@@ -406,11 +413,13 @@ class KeyVarModifiedFieldReason(CandidateReason):
 
     # TODO: add field effect
     def reason_explanation(self) -> str:
-        return f"""
-Our static analysis detect that the method change the value of field `{self.field}`
+        return dedent(f"""\
+            Our static analysis detect that the method change the value of field `{self.field}`
 
-The field was passed to the method `{self.api}` and meet the crash constraint, resulting in the crash.
-"""
+            The field was passed to the method `{self.api}` and meet the crash constraint, resulting in the crash.
+
+            You can verify whether this method can indeed change the value of the field. If so, this method is likely related to the crash.
+            """)
 
 
 class NotOverrideMethodReason(CandidateReason):
@@ -423,13 +432,13 @@ class NotOverrideMethodReason(CandidateReason):
     extend_chain: list[str]
 
     def reason_explanation(self) -> str:
-        return f"""
-Our static analysis tool detect that the class `{self.application_class}` extends the class `{self.framework_class}` by chain {self.extend_chain}.
+        return dedent(f"""\
+            Our static analysis tool detect that the class `{self.application_class}` extends the class `{self.framework_class}` by chain {self.extend_chain}.
 
-When `{self.framework_method}` is invoked, an unconditional exception is thrown out.
+            When `{self.framework_method}` is invoked, an unconditional exception is thrown out.
 
-But in the application code, the method is not override(Therefore, for this method, no code has been provided)
-"""
+            But in the application code, the method is not override(Therefore, for this method, no code has been provided)
+            """)
 
 
 class NotOverrideMethodExecutedReason(CandidateReason):
@@ -438,9 +447,9 @@ class NotOverrideMethodExecutedReason(CandidateReason):
     )
 
     def reason_explanation(self) -> str:
-        return """
-This method was detected because it was executed during the process of the application crashing.
-"""
+        return dedent("""\
+            This method was detected because it was executed during the process of the application crashing.
+            """)
 
 
 class FrameworkRecallReason(CandidateReason):
@@ -449,9 +458,9 @@ class FrameworkRecallReason(CandidateReason):
     )
 
     def reason_explanation(self) -> str:
-        return """
-This method is not in the crash stack, it is a recall method invoked by framework method.
-"""
+        return dedent("""\
+            This method is not in the crash stack, it is a recall method invoked by framework method.
+            """)
 
 
 class KeyVar3Reason(CandidateReason):
@@ -459,9 +468,9 @@ class KeyVar3Reason(CandidateReason):
 
     # TODO: Need more confirmation
     def reason_explanation(self) -> str:
-        return """
-The method is data related to the crash.
-"""
+        return dedent("""\
+            The method is data related to the crash.
+            """)
 
 
 class Candidate(BaseModel):
