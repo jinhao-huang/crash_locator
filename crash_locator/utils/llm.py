@@ -265,10 +265,10 @@ async def _query_extra_candidates(
     return retained_candidates
 
 
-async def query_filter_candidate(
+async def _llm_filter_candidate(
     report_info: ReportInfo, constraint: str | None = None
 ) -> list[Candidate]:
-    logger.info(f"Starting candidate filtering for {report_info.apk_name}")
+    logger.info(f"Starting llm candidate filtering for {report_info.apk_name}")
 
     retained_candidates, base_messages = await _query_base_candidates(
         report_info, constraint
@@ -359,22 +359,19 @@ async def _infer_constraint(
     return _constraint_parser(conversation.messages[-1].content)
 
 
-async def query_filter_candidate_with_constraint(
-    report_info: ReportInfo,
-) -> list[Candidate]:
-    logger.info(f"Starting candidate filtering for {report_info.apk_name}")
-
+async def _construct_constraint(report_info: ReportInfo) -> str:
     inference_messages = Prompt.base_inferrer_prompt()
     for index, framework_method in enumerate(report_info.framework_trace):
-        logger.info(f"Inferring constraint for {framework_method}")
+        logger.info(f"construct constraint for {framework_method}")
         logger.info(
-            f"Inferring process: {index + 1} / {len(report_info.framework_trace)}"
+            f"Constraint construction process: {index + 1} / {len(report_info.framework_trace)}"
         )
 
         if index == 0:
             logger.info(f"Extracting constraint for {framework_method}")
             constraint = await _extract_constraint(framework_method, report_info)
         else:
+            logger.info(f"Inferring constraint for {framework_method}")
             constraint = await _infer_constraint(
                 framework_method, inference_messages, constraint, report_info
             )
@@ -386,4 +383,13 @@ async def query_filter_candidate_with_constraint(
     ) as f:
         f.write(constraint)
 
-    return await query_filter_candidate(report_info, constraint)
+    return constraint
+
+
+async def filter_candidate(report_info: ReportInfo) -> list[Candidate]:
+    logger.info(f"Starting candidate filtering for {report_info.apk_name}")
+
+    constraint = None
+    if config.enable_extract_constraint:
+        constraint = await _construct_constraint(report_info)
+    return await _llm_filter_candidate(report_info, constraint)

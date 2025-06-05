@@ -116,10 +116,7 @@ async def _process_report(
     task_name: str,
     semaphore: asyncio.Semaphore,
 ):
-    from crash_locator.utils.llm import (
-        query_filter_candidate,
-        query_filter_candidate_with_constraint,
-    )
+    from crash_locator.utils.llm import filter_candidate
 
     async with semaphore:
         report_name = pre_check_report_dir.name
@@ -137,14 +134,7 @@ async def _process_report(
         _copy_report(report_name)
 
         try:
-            if config.enable_extract_constraint:
-                logger.info("Enable constraint extraction")
-                retained_candidates = await query_filter_candidate_with_constraint(
-                    report_info
-                )
-            else:
-                logger.info("Disable constraint extraction")
-                retained_candidates = await query_filter_candidate(report_info)
+            retained_candidates = await filter_candidate(report_info)
 
             _candidate_correction(report_info, retained_candidates)
 
