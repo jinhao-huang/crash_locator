@@ -6,9 +6,10 @@ from crash_locator.types.llm import APIType
 from crash_locator.my_types import RunStatistic
 import asyncio
 import logging
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from cachier import set_default_params
+from typing import Optional, Dict, Any
 
 
 class Config(BaseSettings):
@@ -16,7 +17,10 @@ class Config(BaseSettings):
         env_prefix="crash_locator_", env_file=".env", cli_parse_args=True
     )
 
-    enable_extract_constraint: bool = True
+    preset: Optional[str] = None
+
+    enable_extract_constraint: bool
+    enable_notes: bool
 
     root_dir: Path = Path(__file__).parent.parent
 
@@ -116,6 +120,36 @@ class Config(BaseSettings):
 
     def apk_cg_path(self, apk_name: str) -> Path:
         return self.resources_dir / "apk_cg" / apk_name / f"{apk_name}_cg.txt"
+
+    @model_validator(mode="before")
+    @classmethod
+    def apply_preset_config(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        PRESET_CONFIGS = {
+            "baseline": {
+                "enable_extract_constraint": False,
+                "enable_notes": False,
+            },
+            "full": {
+                "enable_extract_constraint": True,
+                "enable_notes": True,
+            },
+        }
+
+        preset = values.get("preset")
+        if preset:
+            if preset not in PRESET_CONFIGS:
+                available = list(PRESET_CONFIGS.keys())
+                raise ValueError(
+                    f"Unknown preset '{preset}'. Available presets: {available}"
+                )
+
+            preset_config = PRESET_CONFIGS[preset]
+
+            for key, preset_value in preset_config.items():
+                if values.get(key) is None:
+                    values[key] = preset_value
+
+        return values
 
 
 config = Config()

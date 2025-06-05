@@ -3,6 +3,7 @@ from crash_locator.utils.java_parser import get_application_code
 from crash_locator.my_types import ReasonTypeLiteral
 from crash_locator.types.llm import Conversation, Message, Role
 from textwrap import dedent
+from crash_locator.config import config
 
 new_line = "\n"
 
@@ -36,23 +37,36 @@ class Prompt:
             )
 
     @staticmethod
-    def FILTER_CANDIDATE_SYSTEM(constraint: str | None = None) -> str:
-        return dedent(f"""
-            You are an Android expert that assist with locating the cause of the crash of Android application.
+    def _FILTER_CANDIDATE_SYSTEM(constraint: str | None = None) -> str:
+        constraint_prompt = (
+            "Additionally, we also provide a constraint which is met when the exception is triggered."
+            if constraint
+            else None
+        )
+        notes_prompt = (
+            "// Note: You need to be aware that errors may be related to multiple aspects, such as for the 'service is null' error, it could be due to the creation method not successfully creating it, or it might have been modified by other methods leading to premature release."
+            if config.enable_notes
+            else None
+        )
 
-            You will be given a crash report first, then you need to analyze the crash report and the cause of the crash.
+        response_prompt = (
+            "For those candidate methods that are most likely to be related to the crash, you just reply 'Yes'(Usually the numbers 'Yes' is less than 3), otherwise you reply 'No' without any additional text."
+            if config.enable_notes
+            else "For those candidate methods that likely to be related to the crash, you just reply 'Yes', otherwise you reply 'No' without any additional text."
+        )
 
-            {"Additionally, we also provide a constraint which is met when the exception is triggered." if constraint else ""}
+        prompts = [
+            "You are an Android expert that assist with locating the cause of the crash of Android application.",
+            "You will be given a crash report first, then you need to analyze the crash report and the cause of the crash.",
+            constraint_prompt,
+            notes_prompt,
+            response_prompt,
+        ]
 
-            Then, we will give you a candidate method at a time, and you need to analyze whether the candidate method is related to the crash.
-
-            // Note: You need to be aware that errors may be related to multiple aspects, such as for the 'service is null' error, it could be due to the creation method not successfully creating it, or it might have been modified by other methods leading to premature release.
-
-            For those candidate methods that are most likely to be related to the crash, you just reply "Yes"(Usually the numbers "Yes" is less than 3), otherwise you reply "No" without any additional text.
-            """)
+        return "\n".join(s for s in prompts if s is not None)
 
     @staticmethod
-    def FILTER_CANDIDATE_CRASH(
+    def _FILTER_CANDIDATE_CRASH(
         report_info: ReportInfo, constraint: str | None = None
     ) -> str:
         return dedent(f"""
@@ -87,10 +101,11 @@ class Prompt:
         return Conversation(
             messages=[
                 Message(
-                    content=Prompt.FILTER_CANDIDATE_SYSTEM(constraint), role=Role.SYSTEM
+                    content=Prompt._FILTER_CANDIDATE_SYSTEM(constraint),
+                    role=Role.SYSTEM,
                 ),
                 Message(
-                    content=Prompt.FILTER_CANDIDATE_CRASH(report_info, constraint),
+                    content=Prompt._FILTER_CANDIDATE_CRASH(report_info, constraint),
                     role=Role.USER,
                 ),
             ]
