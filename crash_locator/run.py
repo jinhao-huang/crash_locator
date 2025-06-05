@@ -90,7 +90,7 @@ def _candidate_correction(
         if candidate in retained_candidates:
             continue
 
-        keep_flag = False
+        keep_reason = None
         if candidate.signature.method_name in [
             "onStart",
             "onDestroy",
@@ -98,18 +98,29 @@ def _candidate_correction(
             "onPause",
             "onResume",
         ]:
-            keep_flag = True
+            keep_reason = "life cycle"
 
         if candidate.reasons.reason_type in [
             ReasonTypeLiteral.NOT_OVERRIDE_METHOD,
             ReasonTypeLiteral.KEY_VAR_3,
         ]:
-            keep_flag = True
+            keep_reason = "possible reason type"
 
         if index == 0:
-            keep_flag = True
+            keep_reason = "first candidate"
 
-        if keep_flag:
+        if keep_reason:
+            run_statistic.corrected_candidates += 1
+            if keep_reason not in run_statistic.corrected_candidates_detail:
+                run_statistic.corrected_candidates_detail[keep_reason] = 0
+            run_statistic.corrected_candidates_detail[keep_reason] += 1
+
+            if candidate.signature == report_info.buggy_method:
+                run_statistic.corrected_buggy_method += 1
+                if keep_reason not in run_statistic.corrected_buggy_method_detail:
+                    run_statistic.corrected_buggy_method_detail[keep_reason] = 0
+                run_statistic.corrected_buggy_method_detail[keep_reason] += 1
+
             retained_candidates.append(candidate)
 
 

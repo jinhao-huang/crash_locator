@@ -103,6 +103,11 @@ class RunStatistic(BaseModel):
         default_factory=dict,
     )
 
+    corrected_candidates: int = 0
+    corrected_candidates_detail: dict[str, int] = Field(default_factory=dict)
+    corrected_buggy_method: int = 0
+    corrected_buggy_method_detail: dict[str, int] = Field(default_factory=dict)
+
     _lock: threading.Lock = PrivateAttr(default_factory=threading.Lock)
     _path: Path = PrivateAttr(default=None)
 
