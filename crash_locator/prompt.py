@@ -120,7 +120,8 @@ class Prompt:
             code = get_application_code(report_info.apk_name, candidate)
             parts.append(Prompt.Part.method_code(code))
 
-        parts.append(Prompt.Part.candidate_reason(candidate))
+        if config.enable_candidate_reason:
+            parts.append(Prompt.Part.candidate_reason(candidate))
         return Prompt.Part.merger(parts)
 
     EXTRACTOR_SYSTEM_PROMPT: str = dedent("""\

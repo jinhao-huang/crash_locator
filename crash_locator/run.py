@@ -136,7 +136,8 @@ async def _process_report(
         try:
             retained_candidates = await filter_candidate(report_info)
 
-            _candidate_correction(report_info, retained_candidates)
+            if config.enable_candidate_correction:
+                _candidate_correction(report_info, retained_candidates)
 
         except asyncio.CancelledError:
             logger.info(f"Task {task_name} cancelled")

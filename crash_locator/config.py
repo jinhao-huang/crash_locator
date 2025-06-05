@@ -21,6 +21,8 @@ class Config(BaseSettings):
 
     enable_extract_constraint: bool
     enable_notes: bool
+    enable_candidate_reason: bool
+    enable_candidate_correction: bool
 
     root_dir: Path = Path(__file__).parent.parent
 
@@ -128,10 +130,14 @@ class Config(BaseSettings):
             "baseline": {
                 "enable_extract_constraint": False,
                 "enable_notes": False,
+                "enable_candidate_reason": False,
+                "enable_candidate_correction": False,
             },
             "full": {
                 "enable_extract_constraint": True,
                 "enable_notes": True,
+                "enable_candidate_reason": True,
+                "enable_candidate_correction": True,
             },
         }
 
@@ -235,6 +241,21 @@ def setup_logging(log_file_dir: Path):
             },
             "loggers": {
                 "crash_locator": {
+                    "handlers": ["console", "file"],
+                    "level": "DEBUG",
+                    "propagate": False,
+                },
+                "httpx": {
+                    "handlers": ["console", "file"],
+                    "level": "INFO",
+                    "propagate": False,
+                },
+                "httpcore": {
+                    "handlers": ["console", "file"],
+                    "level": "INFO",
+                    "propagate": False,
+                },
+                "openai": {
                     "handlers": ["console", "file"],
                     "level": "DEBUG",
                     "propagate": False,
