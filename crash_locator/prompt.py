@@ -11,8 +11,8 @@ new_line = "\n"
 class Prompt:
     class Part:
         @staticmethod
-        def merger(parts: list[str]) -> str:
-            return new_line.join(parts)
+        def merger(parts: list[str | None]) -> str:
+            return new_line.join(s for s in parts if s is not None)
 
         @staticmethod
         def candidate_method(candidate: Candidate) -> str:
@@ -20,7 +20,8 @@ class Prompt:
 
         @staticmethod
         def method_code(code: str) -> str:
-            return dedent(f"""Method Code:
+            return dedent(f"""\
+                Method Code:
                 ```
                 {code}
                 ```
@@ -28,13 +29,12 @@ class Prompt:
 
         @staticmethod
         def candidate_reason(candidate: Candidate) -> str:
-            return dedent(
-                f"""Candidate Reason:
+            return dedent(f"""\
+                Candidate Reason:
                 ```
                 {candidate.reasons.reason_explanation()}
                 ```
-                """
-            )
+                """)
 
     @staticmethod
     def _FILTER_CANDIDATE_SYSTEM(constraint: str | None = None) -> str:
@@ -63,13 +63,13 @@ class Prompt:
             response_prompt,
         ]
 
-        return "\n".join(s for s in prompts if s is not None)
+        return Prompt.Part.merger(prompts)
 
     @staticmethod
     def _FILTER_CANDIDATE_CRASH(
         report_info: ReportInfo, constraint: str | None = None
     ) -> str:
-        return dedent(f"""
+        return dedent(f"""\
             Crash Message:
             ```
             {report_info.crash_message}
@@ -123,7 +123,7 @@ class Prompt:
         parts.append(Prompt.Part.candidate_reason(candidate))
         return Prompt.Part.merger(parts)
 
-    EXTRACTOR_SYSTEM_PROMPT: str = dedent("""
+    EXTRACTOR_SYSTEM_PROMPT: str = dedent("""\
         Your task is to extract the precondition constraint of the target exception in Java methods and convert them into constraint related to method parameters or class field.
 
         Following are rules for formatting the constraints, you should replace the content in the brackets with the corresponding information:
@@ -156,7 +156,7 @@ class Prompt:
         ```
         """)
 
-    EXTRACTOR_USER_EXAMPLE1 = dedent("""
+    EXTRACTOR_USER_EXAMPLE1 = dedent("""\
         Code: ```
         Class Name: Pools
 
@@ -179,7 +179,7 @@ class Prompt:
         ```
         """)
 
-    EXTRACTOR_ASSISTANT_EXAMPLE1 = dedent("""
+    EXTRACTOR_ASSISTANT_EXAMPLE1 = dedent("""\
         Constraint: ```
         [release]: <Parameter 0: T instance> must not already be present in <Field Pools: T[] mPool>
         ```
@@ -189,7 +189,7 @@ class Prompt:
     def EXTRACTOR_USER_PROMPT(
         code: str, class_name: str, exception_name: str, crash_message: str
     ) -> str:
-        return dedent(f"""
+        return dedent(f"""\
             Code: ```
             Class Name: {class_name}
 
@@ -210,7 +210,7 @@ class Prompt:
             ]
         )
 
-    INFERRER_SYSTEM_PROMPT: str = dedent("""
+    INFERRER_SYSTEM_PROMPT: str = dedent("""\
         You are an Android expert that assist with inferring the triggering constraint of the target exception in Java methods
 
         We will provide you with the Java method code which may trigger an exception. We will also provide a constraint of method which is invoked in code. A exception will be triggered when this constraint is met.
@@ -246,7 +246,7 @@ class Prompt:
         ``` 
         """)
 
-    INFERRER_USER_EXAMPLE1 = dedent("""
+    INFERRER_USER_EXAMPLE1 = dedent("""\
         Code: ```
         Class Name: AbstractWindowedCursor
 
@@ -265,7 +265,7 @@ class Prompt:
         ```
         """)
 
-    INFERRER_ASSISTANT_EXAMPLE1 = dedent("""
+    INFERRER_ASSISTANT_EXAMPLE1 = dedent("""\
         Constraint: ```
         [checkPosition]: <Field AbstractCursor: int mPos> == -1
         ```
@@ -273,7 +273,7 @@ class Prompt:
 
     @staticmethod
     def INFERRER_USER_PROMPT(code: str, class_name: str, constraint: str) -> str:
-        return dedent(f"""
+        return dedent(f"""\
             Code: ```
             Class Name: {class_name}
 
