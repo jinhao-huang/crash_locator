@@ -533,10 +533,14 @@ def _successful_statistic(report: ReportInfo, statistic: PreCheckStatistic):
         ):
             statistic.valid_reports_reason_type_distribution[
                 candidate.reasons.reason_type
-            ] = 0
-        statistic.valid_reports_reason_type_distribution[
-            candidate.reasons.reason_type
+            ] = {"total": 0, "buggy": 0}
+        statistic.valid_reports_reason_type_distribution[candidate.reasons.reason_type][
+            "total"
         ] += 1
+        if candidate.signature == report.buggy_method:
+            statistic.valid_reports_reason_type_distribution[
+                candidate.reasons.reason_type
+            ]["buggy"] += 1
 
         if candidate.signature == report.buggy_method:
             rank = index + 1

@@ -28,7 +28,7 @@ class PreCheckStatistic(BaseModel):
     # Valid reports candidates reason type distribution
     valid_reports_reason_type_distribution: dict[str, int] = Field(default_factory=dict)
     # Valid reports buggy candidate rank distribution
-    valid_reports_buggy_candidate_rank_distribution: dict[int, int] = Field(
+    valid_reports_buggy_candidate_rank_distribution: dict[int, dict[str, int]] = Field(
         default_factory=dict
     )
 
