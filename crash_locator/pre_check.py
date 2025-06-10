@@ -542,6 +542,22 @@ def _successful_statistic(report: ReportInfo, statistic: PreCheckStatistic):
                 candidate.reasons.reason_type
             ]["buggy"] += 1
 
+        if len(report.candidates) > 1:
+            if (
+                candidate.reasons.reason_type
+                not in statistic.processed_reports_reason_type_distribution
+            ):
+                statistic.processed_reports_reason_type_distribution[
+                    candidate.reasons.reason_type
+                ] = {"total": 0, "buggy": 0}
+            statistic.processed_reports_reason_type_distribution[
+                candidate.reasons.reason_type
+            ]["total"] += 1
+            if candidate.signature == report.buggy_method:
+                statistic.processed_reports_reason_type_distribution[
+                    candidate.reasons.reason_type
+                ]["buggy"] += 1
+
         if candidate.signature == report.buggy_method:
             rank = index + 1
             if len(report.candidates) == 1:

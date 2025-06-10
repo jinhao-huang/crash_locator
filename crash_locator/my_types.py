@@ -26,9 +26,14 @@ class PreCheckStatistic(BaseModel):
         default_factory=dict
     )
     # Valid reports candidates reason type distribution
-    valid_reports_reason_type_distribution: dict[str, int] = Field(default_factory=dict)
+    valid_reports_reason_type_distribution: dict[str, dict[str, int]] = Field(
+        default_factory=dict
+    )
+    processed_reports_reason_type_distribution: dict[str, dict[str, int]] = Field(
+        default_factory=dict
+    )
     # Valid reports buggy candidate rank distribution
-    valid_reports_buggy_candidate_rank_distribution: dict[int, dict[str, int]] = Field(
+    valid_reports_buggy_candidate_rank_distribution: dict[int, int] = Field(
         default_factory=dict
     )
 
@@ -89,6 +94,8 @@ class RunStatistic(BaseModel):
     retained_candidates: int = 0
     # Count of buggy methods that have been filtered
     filtered_buggy_method: int = 0
+    # Count of filtered correct candidates that are not buggy method
+    valid_filtered_candidates: int = 0
 
     # Count of skipped reports
     skipped_reports: int = 0
@@ -157,6 +164,10 @@ class RunStatistic(BaseModel):
                     )
                     if finished_report.is_buggy_method_filtered:
                         self.filtered_buggy_method += 1
+                    else:
+                        self.valid_filtered_candidates += (
+                            finished_report.filtered_candidates_count
+                        )
                 case SkippedReportInfo():
                     self.skipped_reports += 1
                 case FailedReportInfo():
