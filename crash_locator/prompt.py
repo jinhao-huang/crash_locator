@@ -4,37 +4,47 @@ from crash_locator.my_types import ReasonTypeLiteral
 from crash_locator.types.llm import Conversation, Message, Role
 from textwrap import dedent
 from crash_locator.config import config
-
-new_line = "\n"
+from string import Template
 
 
 class Prompt:
     class Part:
         @staticmethod
         def merger(parts: list[str | None]) -> str:
-            return new_line.join(s for s in parts if s is not None)
+            return "\n\n".join([s for s in parts if s is not None])
 
         @staticmethod
         def candidate_method(candidate: Candidate) -> str:
             return f"Candidate Method: {candidate.signature}"
 
         @staticmethod
-        def method_code(code: str) -> str:
-            return dedent(f"""\
-                Method Code:
-                ```
-                {code}
-                ```
-                """)
+        def method_code(code: str, class_name: str) -> str:
+            normalized_code = dedent(code).strip()
+            template = Template(
+                dedent(
+                    """\
+                    Code:
+                    ```
+                    Class Name: $class_name
+
+                    $code
+                    ```
+                    """
+                ).strip()
+            )
+            return template.substitute(code=normalized_code, class_name=class_name)
 
         @staticmethod
         def candidate_reason(candidate: Candidate) -> str:
-            return dedent(f"""\
+            template = Template(
+                dedent("""\
                 Candidate Reason:
                 ```
-                {candidate.reasons.reason_explanation()}
+                $reason
                 ```
-                """)
+                """).strip()
+            )
+            return template.substitute(reason=candidate.reasons.reason_explanation())
 
     @staticmethod
     def _FILTER_CANDIDATE_SYSTEM(constraint: str | None = None) -> str:
@@ -69,29 +79,53 @@ class Prompt:
     def _FILTER_CANDIDATE_CRASH(
         report_info: ReportInfo, constraint: str | None = None
     ) -> str:
-        return dedent(f"""\
-            Crash Message:
-            ```
-            {report_info.crash_message}
-            ```
+        constraint_template = Template(
+            dedent("""\
+                Constraint:
+                ```
+                $constraint
+                ```
+            """).strip()
+        )
 
-            Stack Trace:
-            ```
-            {new_line.join(report_info.stack_trace)}
-            ```
+        constraint_part = (
+            constraint_template.substitute(constraint=constraint)
+            if constraint
+            else None
+        )
 
-            Exception Type:
-            ```
-            {report_info.exception_type}
-            ```
+        crash_template = Template(
+            dedent("""\
+                Crash Message:
+                ```
+                $crash_message
+                ```
 
-            Android Version:
-            ```
-            {report_info.android_version}
-            ```
+                Stack Trace:
+                ```
+                $stack_trace
+                ```
 
-            {"Constraint: ```" + new_line + constraint + new_line + "```" if constraint else ""}
-            """)
+                Exception Type:
+                ```
+                $exception_type
+                ```
+
+                Android Version:
+                ```
+                $android_version
+                ```
+            """).strip()
+        )
+
+        crash_part = crash_template.substitute(
+            crash_message=report_info.crash_message,
+            stack_trace="\n".join(report_info.stack_trace),
+            exception_type=report_info.exception_type,
+            android_version=report_info.android_version,
+        )
+
+        return Prompt.Part.merger([crash_part, constraint_part])
 
     @staticmethod
     def base_filter_candidate_prompt(
@@ -118,14 +152,18 @@ class Prompt:
         ]
         if candidate.reasons.reason_type != ReasonTypeLiteral.NOT_OVERRIDE_METHOD:
             code = get_application_code(report_info.apk_name, candidate)
-            parts.append(Prompt.Part.method_code(code))
+            parts.append(Prompt.Part.method_code(code, candidate.signature.class_name))
 
         if config.enable_candidate_reason:
             parts.append(Prompt.Part.candidate_reason(candidate))
 
-        parts.append(
-            "// Note: You only need to reply whether this candidate is related to the crash, there is no need to repeat the results of previous candidates."
+        response_note = (
+            "// Note: you just reply 'Yes.' if this candidate is directly related to the crash, otherwise you reply 'No.' at the beginning, followed by a concise reason explanation of no more than two sentences after the period. You should only reply 'yes' when you are very confident that the candidate is the cause of the crash."
+            if config.enable_notes
+            else "// Note: you just reply 'Yes' if this candidate is related to the crash, otherwise you reply 'No' without any additional text."
         )
+
+        parts.append(response_note)
         return Prompt.Part.merger(parts)
 
     EXTRACTOR_SYSTEM_PROMPT: str = dedent("""\
@@ -195,18 +233,24 @@ class Prompt:
     def EXTRACTOR_USER_PROMPT(
         code: str, class_name: str, exception_name: str, crash_message: str
     ) -> str:
-        return dedent(f"""\
-            Code: ```
-            Class Name: {class_name}
+        normalized_code = dedent(code).strip()
+        code_part = Prompt.Part.method_code(normalized_code, class_name)
 
-            {code}
+        exception_template = Template(
+            dedent("""\
+            Exception:
             ```
+            Exception Type: $exception_name
+            Exception Message: $crash_message
+            ```
+        """).strip()
+        )
 
-            Exception: ```
-            Exception Type: {exception_name}
-            Exception Message: {crash_message}
-            ```
-            """)
+        exception_part = exception_template.substitute(
+            exception_name=exception_name, crash_message=crash_message
+        )
+
+        return Prompt.Part.merger([code_part, exception_part])
 
     @staticmethod
     def base_extractor_prompt() -> Conversation:
@@ -280,17 +324,21 @@ class Prompt:
 
     @staticmethod
     def INFERRER_USER_PROMPT(code: str, class_name: str, constraint: str) -> str:
-        return dedent(f"""\
-            Code: ```
-            Class Name: {class_name}
+        normalized_code = dedent(code).strip()
+        code_part = Prompt.Part.method_code(normalized_code, class_name)
 
-            {code}
-            ```
+        constraint_template = Template(
+            dedent("""\
+                Original_Constraint:
+                ```
+                $constraint
+                ```
+            """).strip()
+        )
 
-            Original_Constraint: ```
-            {constraint}
-            ```
-            """)
+        constraint_part = constraint_template.substitute(constraint=constraint)
+
+        return Prompt.Part.merger([code_part, constraint_part])
 
     @staticmethod
     def base_inferrer_prompt() -> Conversation:

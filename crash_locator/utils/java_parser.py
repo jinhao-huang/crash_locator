@@ -126,8 +126,8 @@ def _get_method_code_in_file(
         raise MethodFileNotFoundException()
 
     with open(file_path, "r", encoding="utf-8") as f:
-        source_code = f.read()
-    tree = parser.parse(bytes(source_code, "utf8"))
+        code_lines = f.readlines()
+    tree = parser.parse(bytes("".join(code_lines), "utf8"))
 
     query_string = f"""
     (
@@ -156,7 +156,8 @@ def _get_method_code_in_file(
     else:
         method = method[0]
 
-    return method.text.decode("utf8")
+    method_code = code_lines[method.start_point.row : method.end_point.row + 1]
+    return "".join(method_code)
 
 
 def _filter_methods(
