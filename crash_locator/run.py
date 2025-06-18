@@ -80,7 +80,12 @@ def _copy_report(report_name: str):
 
 class TaskAdapter(logging.LoggerAdapter):
     def process(self, msg, kwargs):
-        return f"[Task {self.extra['task_name']}] {msg}", kwargs
+        task_name = (
+            self.extra["task_name"]
+            if self.extra and "task_name" in self.extra
+            else "Unknown"
+        )
+        return f"[Task {task_name}] {msg}", kwargs
 
 
 def _candidate_correction(
