@@ -107,12 +107,8 @@ def _candidate_correction(
 
         if candidate.reasons.reason_type in [
             ReasonTypeLiteral.NOT_OVERRIDE_METHOD,
-            ReasonTypeLiteral.KEY_VAR_3,
         ]:
             keep_reason = "possible reason type"
-
-        if index == 0:
-            keep_reason = "first candidate"
 
         if keep_reason:
             run_statistic.corrected_candidates += 1
