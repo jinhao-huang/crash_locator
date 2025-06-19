@@ -219,7 +219,7 @@ async def _query_base_candidates(
         conversation = await _query_llm_with_retry(
             conversation,
             3,
-            lambda x: ("Yes" in x and "No" not in x) or ("No" in x and "Yes" not in x),
+            lambda x: x.strip().startswith("Yes") or x.strip().startswith("No"),
         )
 
         if "Yes" in conversation.messages[-1].content:
@@ -255,7 +255,7 @@ async def _query_extra_candidates(
         conversation = await _query_llm_with_retry(
             conversation,
             3,
-            lambda x: ("Yes" in x and "No" not in x) or ("No" in x and "Yes" not in x),
+            lambda x: x.strip().startswith("Yes") or x.strip().startswith("No"),
         )
         if "Yes" in conversation.messages[-1].content:
             retained_candidates.append(candidate)
