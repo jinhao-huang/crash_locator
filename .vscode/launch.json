@@ -1,0 +1,22 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "crash_locator baseline debug",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "crash_locator.__main__",
+            "args": ["--debug", "true", "--max_workers", "1", "--preset", "baseline"]
+        },
+        {
+            "name": "crash_locator pre_check module",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "crash_locator.pre_check",
+            "args": ["--debug", "true"]
+        }
+    ]
+}

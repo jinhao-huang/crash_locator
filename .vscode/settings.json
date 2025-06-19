@@ -1,5 +1,9 @@
 {
     "python.analysis.exclude": [
         "Data"
-    ]
+    ],
+    "cursorpyright.analysis.exclude": [
+        "Data"
+    ],
+    "cursorpyright.analysis.typeCheckingMode": "off"
 }
