@@ -292,7 +292,7 @@ def _get_and_check_framework_stack(
 def _candidate_into_reason(
     candidate: dict, framework_entry_api: str, terminal_api: str | None
 ) -> CandidateReason:
-    def _extract_var4_field_and_passed_method(explanation_info):
+    def _extract_var4_field_and_passed_method(explanation_info) -> tuple[int, str, str]:
         import re
 
         pattern = "Value of the (\d+) parameter \(start from 0\) in API (\S+) may be wrong and trigger crash\. Method \S+ modify the field variable (\<[\S ]+\>), which may influence the buggy parameter value\."
@@ -301,6 +301,9 @@ def _candidate_into_reason(
         if m:
             index, api, field = m.groups()
             return int(index), api, field
+        raise ValueError(
+            f"Cannot extract var4 field and passed method from {explanation_info}"
+        )
 
     candidate_reason = candidate["Reasons"][0]
     reason_type = candidate_reason["Explanation Type"]

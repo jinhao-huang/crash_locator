@@ -10,7 +10,7 @@ from string import Template
 class Prompt:
     class Part:
         @staticmethod
-        def merger(parts: list[str | None]) -> str:
+        def merger(parts: list[str] | list[str | None]) -> str:
             return "\n\n".join([s for s in parts if s is not None])
 
         @staticmethod
@@ -162,8 +162,17 @@ class Prompt:
             if config.enable_notes
             else "// Note: you just reply 'Yes' if this candidate is related to the crash, otherwise you reply 'No' without any additional text."
         )
-
         parts.append(response_note)
+
+        if (
+            config.enable_notes
+            and report_info.candidates
+            and report_info.candidates[0] == candidate
+        ):
+            parts.append(
+                "// Note: this is the rank 1 candidate in our analysis tool, which means we have great confidence that this candidate may cause a crash. Therefore, unless you are very sure that this candidate has nothing to do with the crash, please do not filter out this candidate."
+            )
+
         return Prompt.Part.merger(parts)
 
     EXTRACTOR_SYSTEM_PROMPT: str = dedent("""\
