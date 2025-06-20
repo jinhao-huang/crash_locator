@@ -412,6 +412,7 @@ def _check_candidate_code_exist(report: ReportInfo) -> None:
         except ValueError:
             if candidate.reasons.reason_type != ReasonTypeLiteral.NOT_OVERRIDE_METHOD:
                 report.candidates.remove(candidate)
+                statistic.removed_candidates += 1
 
 
 def _check_framework_code_exist(report: ReportInfo) -> None:
@@ -456,9 +457,32 @@ def _fix_candidate_signature(report: ReportInfo) -> None:
                 candidate.signature = MethodSignature.from_str(target_method)
 
 
+def _raw_statistic(report: dict):
+    statistic.raw_statistic.total_candidates += len(
+        report["Fault Localization by CrashTracker"]["Buggy Method Candidates"]
+    )
+
+    if "Labeled Buggy Method" in report["Crash Info in Dataset"]:
+        statistic.raw_statistic.total_buggy_method_candidates += 1
+
+        buggy_method = report["Crash Info in Dataset"]["Labeled Buggy Method"]
+        for candidate in report["Fault Localization by CrashTracker"][
+            "Buggy Method Candidates"
+        ]:
+            if candidate["Candidate Name"] == buggy_method:
+                statistic.raw_statistic.buggy_method_candidates_exist += 1
+                break
+        else:
+            statistic.raw_statistic.buggy_method_candidates_not_exist += 1
+            statistic.raw_statistic.buggy_method_candidates_not_exist_detail.append(
+                report["Crash Info in Dataset"]["Apk name"]
+            )
+
+
 def pre_check(crash_report_path: Path) -> ReportInfo:
     report = json.load(open(crash_report_path, "r"))
 
+    _raw_statistic(report)
     report_completion(report)
 
     stack_trace = [

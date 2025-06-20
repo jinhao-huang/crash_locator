@@ -10,6 +10,14 @@ from crash_locator.types.llm import TokenUsage, ReasoningEffort
 from textwrap import dedent
 
 
+class PreCheckRawStatistic(BaseModel):
+    total_candidates: int = 0
+    total_buggy_method_candidates: int = 0
+    buggy_method_candidates_exist: int = 0
+    buggy_method_candidates_not_exist: int = 0
+    buggy_method_candidates_not_exist_detail: list[str] = Field(default_factory=list)
+
+
 class PreCheckStatistic(BaseModel):
     # Total crash reports
     total_reports: int = 0
@@ -17,6 +25,7 @@ class PreCheckStatistic(BaseModel):
     invalid_reports: int = 0
     invalid_report_exceptions: dict[str, int] = Field(default_factory=dict)
     invalid_reports_detail: dict[str, str] = Field(default_factory=dict)
+    removed_candidates: int = 0
     # Fixed due to CrashTracker candidate signature error
     fixed_failed_duplicate: int = 0
     fixed_reports: int = 0
@@ -36,6 +45,7 @@ class PreCheckStatistic(BaseModel):
     valid_reports_buggy_candidate_rank_distribution: dict[int, int] = Field(
         default_factory=dict
     )
+    raw_statistic: PreCheckRawStatistic = Field(default_factory=PreCheckRawStatistic)
 
 
 class ReportStatus(StrEnum):
