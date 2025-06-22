@@ -50,6 +50,18 @@ def get_child(node: Node, child_type: str) -> Node | None:
     return children_candidates[0]
 
 
+def get_children_by_type(node: Node, child_type: str) -> list[Node]:
+    """Get the children nodes of the given node with the given type.
+
+    Returns:
+        The children nodes if found, otherwise an empty list.
+
+    Raises:
+        MultipleChildrenFoundException: If multiple child nodes are found.
+    """
+    return [child for child in node.named_children if child.type == child_type]
+
+
 def _get_type_child(
     node: Node, second_type_identifier_index: int | None = None
 ) -> Node | None:

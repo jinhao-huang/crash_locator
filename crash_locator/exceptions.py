@@ -49,7 +49,13 @@ class NoTerminalAPIException(PreCheckException):
         super().__init__(self.message)
 
 
-class MethodCodeException(Exception):
+class CodeRetrievalException(Exception):
+    def __init__(self, message="Code retrieval exception"):
+        self.message = message
+        super().__init__(self.message)
+
+
+class MethodCodeException(CodeRetrievalException):
     def __init__(self, message="Method code cannot be retrieved"):
         self.message = message
         super().__init__(self.message)
@@ -69,6 +75,24 @@ class NoMethodFoundCodeError(MethodCodeException):
 
 class MethodFileNotFoundException(MethodCodeException):
     def __init__(self, message="Method file not found"):
+        self.message = message
+        super().__init__(self.message)
+
+
+class ClassFileNotFoundException(CodeRetrievalException):
+    def __init__(self, message="Class file not found"):
+        self.message = message
+        super().__init__(self.message)
+
+
+class ClassNotFoundException(CodeRetrievalException):
+    def __init__(self, message="Class not found"):
+        self.message = message
+        super().__init__(self.message)
+
+
+class MultipleClassesFoundCodeError(ClassFileNotFoundException):
+    def __init__(self, message="Multiple classes found with the same name."):
         self.message = message
         super().__init__(self.message)
 

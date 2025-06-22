@@ -14,12 +14,15 @@ from crash_locator.exceptions import (
     NoMethodFoundCodeError,
     MethodFileNotFoundException,
     UnknownException,
+    ClassNotFoundException,
+    MultipleClassesFoundCodeError,
 )
 from crash_locator.utils.tree_sitter_helper import (
     get_parent,
     get_child,
     get_type_child,
     find_ancestor_by_type,
+    get_children_by_type,
 )
 import logging
 
@@ -75,6 +78,17 @@ def get_application_code(
     raise NoMethodFoundCodeError()
 
 
+def get_application_code_by_method_signature(
+    apk_name: str,
+    method_signature: MethodSignature,
+) -> str:
+    """Get the application code for a given method signature."""
+    return _get_method_code_in_file(
+        config.application_code_dir(apk_name) / method_signature.into_path(),
+        method_signature,
+    )
+
+
 def get_framework_code(
     method_signature: MethodSignature,
     android_version: str,
@@ -112,6 +126,61 @@ def get_framework_code(
                 return _get_method_code_in_file(code_path, method_signature)
 
         raise MethodFileNotFoundException()
+
+
+def list_application_methods_by_class(
+    class_signature: ClassSignature,
+    apk_name: str,
+) -> list[str]:
+    """List all methods in a given class."""
+    code_path = config.application_code_dir(apk_name) / class_signature.into_path()
+    if not code_path.exists():
+        raise MethodFileNotFoundException()
+    with open(code_path, "r", encoding="utf-8") as f:
+        code_bytes = f.read().encode("utf-8")
+    tree = parser.parse(code_bytes)
+
+    query_string = f"""
+    (
+        class_declaration
+        (identifier) @name (#eq? @name "{class_signature.class_name}")
+    ) @class"""
+
+    query = JAVA_LANGUAGE.query(query_string)
+    captures = query.captures(tree.root_node)
+    class_node = captures.get("class")
+    if class_node is None:
+        raise ClassNotFoundException()
+    elif len(class_node) > 1:
+        raise MultipleClassesFoundCodeError()
+
+    class_node = class_node[0]
+    class_body = get_child(class_node, "class_body")
+    if class_body is None:
+        raise ClassNotFoundException()
+    method_nodes = get_children_by_type(class_body, "method_declaration")
+    method_strings = [
+        _method_node_to_signature_string(method_node, code_bytes)
+        for method_node in method_nodes
+    ]
+    return method_strings
+
+
+def _method_node_to_signature_string(method_node: Node, code_bytes: bytes) -> str:
+    start_byte_index = method_node.start_byte
+
+    last_node = None
+    for child in method_node.children:
+        if child.type == "block":
+            break
+        last_node = child
+
+    if last_node is None:
+        raise UnknownException()
+
+    end_byte_index = last_node.end_byte
+    method_code = code_bytes[start_byte_index:end_byte_index]
+    return method_code.decode("utf-8")
 
 
 def _get_method_code_in_file(
