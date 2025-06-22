@@ -32,7 +32,7 @@ parser = Parser(JAVA_LANGUAGE)
 logger = logging.getLogger(__name__)
 
 
-def get_application_code(
+def get_candidate_code(
     apk_name: str,
     candidate: Candidate,
 ) -> str:
@@ -78,7 +78,7 @@ def get_application_code(
     raise NoMethodFoundCodeError()
 
 
-def get_application_code_by_method_signature(
+def get_application_code(
     apk_name: str,
     method_signature: MethodSignature,
 ) -> str:

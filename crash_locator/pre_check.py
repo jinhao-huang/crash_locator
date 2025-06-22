@@ -39,7 +39,7 @@ from crash_locator.my_types import (
     ReasonTypeLiteral,
 )
 from crash_locator.utils.helper import get_method_type
-from crash_locator.utils.java_parser import get_application_code, get_framework_code
+from crash_locator.utils.java_parser import get_candidate_code, get_framework_code
 
 logger = logging.getLogger()
 statistic = PreCheckStatistic()
@@ -406,7 +406,7 @@ def _check_candidate_code_exist(report: ReportInfo) -> None:
     """
     for candidate in report.candidates[:]:
         try:
-            get_application_code(report.apk_name, candidate)
+            get_candidate_code(report.apk_name, candidate)
         except CodeRetrievalException:
             raise CandidateCodeNotFoundException(str(candidate.signature))
         except ValueError:
