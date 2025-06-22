@@ -12,10 +12,10 @@ from crash_locator.my_types import (
 from crash_locator.exceptions import (
     MultipleMethodsCodeError,
     NoMethodFoundCodeError,
-    MethodFileNotFoundException,
     UnknownException,
     ClassNotFoundException,
     MultipleClassesFoundCodeError,
+    CodeFileNotFoundException,
 )
 from crash_locator.utils.tree_sitter_helper import (
     get_parent,
@@ -125,7 +125,7 @@ def get_framework_code(
             if code_path.exists():
                 return _get_method_code_in_file(code_path, method_signature)
 
-        raise MethodFileNotFoundException()
+        raise CodeFileNotFoundException()
 
 
 def list_application_methods_by_class(
@@ -135,7 +135,7 @@ def list_application_methods_by_class(
     """List all methods in a given class."""
     code_path = config.application_code_dir(apk_name) / class_signature.into_path()
     if not code_path.exists():
-        raise MethodFileNotFoundException()
+        raise CodeFileNotFoundException()
     with open(code_path, "r", encoding="utf-8") as f:
         code_bytes = f.read().encode("utf-8")
     tree = parser.parse(code_bytes)
@@ -192,7 +192,7 @@ def _get_method_code_in_file(
     method_name = method_signature.method_name
 
     if not file_path.exists():
-        raise MethodFileNotFoundException()
+        raise CodeFileNotFoundException()
 
     with open(file_path, "r", encoding="utf-8") as f:
         code_lines = f.readlines()

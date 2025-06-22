@@ -18,10 +18,10 @@ from crash_locator.my_types import (
     KeyVar3Reason,
 )
 from crash_locator.exceptions import (
+    CodeRetrievalException,
     EmptyExceptionInfoException,
     PreCheckException,
     InvalidFrameworkStackException,
-    MethodCodeException,
     NoBuggyMethodCandidatesException,
     CandidateCodeNotFoundException,
     NoTerminalAPIException,
@@ -407,7 +407,7 @@ def _check_candidate_code_exist(report: ReportInfo) -> None:
     for candidate in report.candidates[:]:
         try:
             get_application_code(report.apk_name, candidate)
-        except MethodCodeException:
+        except CodeRetrievalException:
             raise CandidateCodeNotFoundException(str(candidate.signature))
         except ValueError:
             if candidate.reasons.reason_type != ReasonTypeLiteral.NOT_OVERRIDE_METHOD:
@@ -419,7 +419,7 @@ def _check_framework_code_exist(report: ReportInfo) -> None:
     for method in report.framework_trace:
         try:
             get_framework_code(method, report.android_version)
-        except MethodCodeException as e:
+        except CodeRetrievalException as e:
             raise FrameworkCodeNotFoundException(method, str(e))
 
 

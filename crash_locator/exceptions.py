@@ -55,32 +55,20 @@ class CodeRetrievalException(Exception):
         super().__init__(self.message)
 
 
-class MethodCodeException(CodeRetrievalException):
-    def __init__(self, message="Method code cannot be retrieved"):
+class CodeFileNotFoundException(CodeRetrievalException):
+    def __init__(self, message="Code file not found"):
         self.message = message
         super().__init__(self.message)
 
 
-class MultipleMethodsCodeError(MethodCodeException):
-    def __init__(self, message="Multiple methods found with the same name."):
+class MultipleMethodsCodeError(CodeRetrievalException):
+    def __init__(self, message="Multiple methods found with the same name"):
         self.message = message
         super().__init__(self.message)
 
 
-class NoMethodFoundCodeError(MethodCodeException):
+class NoMethodFoundCodeError(CodeRetrievalException):
     def __init__(self, message="No method found in the report"):
-        self.message = message
-        super().__init__(self.message)
-
-
-class MethodFileNotFoundException(MethodCodeException):
-    def __init__(self, message="Method file not found"):
-        self.message = message
-        super().__init__(self.message)
-
-
-class ClassFileNotFoundException(CodeRetrievalException):
-    def __init__(self, message="Class file not found"):
         self.message = message
         super().__init__(self.message)
 
@@ -91,8 +79,8 @@ class ClassNotFoundException(CodeRetrievalException):
         super().__init__(self.message)
 
 
-class MultipleClassesFoundCodeError(ClassFileNotFoundException):
-    def __init__(self, message="Multiple classes found with the same name."):
+class MultipleClassesFoundCodeError(CodeRetrievalException):
+    def __init__(self, message="Multiple classes found with the same name"):
         self.message = message
         super().__init__(self.message)
 
