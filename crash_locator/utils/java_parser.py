@@ -16,6 +16,7 @@ from crash_locator.exceptions import (
     ClassNotFoundException,
     MultipleClassesFoundCodeError,
     CodeFileNotFoundException,
+    FieldNotFoundException,
 )
 from crash_locator.utils.tree_sitter_helper import (
     get_parent,
@@ -164,6 +165,83 @@ def list_application_methods_by_class(
         for method_node in method_nodes
     ]
     return method_strings
+
+
+def list_application_fields(
+    class_signature: ClassSignature,
+    apk_name: str,
+) -> list[str]:
+    """List all fields in a given class."""
+    code_path = config.application_code_dir(apk_name) / class_signature.into_path()
+    if not code_path.exists():
+        raise CodeFileNotFoundException()
+    with open(code_path, "r", encoding="utf-8") as f:
+        code_bytes = f.read().encode("utf-8")
+    tree = parser.parse(code_bytes)
+
+    field_nodes = _get_all_fields_in_class(tree.root_node, class_signature.class_name)
+    field_strings = [
+        _field_node_to_signature_string(field_node, code_bytes)
+        for field_node in field_nodes
+    ]
+    return field_strings
+
+
+def get_application_field(
+    apk_name: str,
+    class_signature: ClassSignature,
+    field_name: str,
+) -> str:
+    """Get the application code for a given field name."""
+    code_path = config.application_code_dir(apk_name) / class_signature.into_path()
+    if not code_path.exists():
+        raise CodeFileNotFoundException()
+    with open(code_path, "r", encoding="utf-8") as f:
+        code_bytes = f.read().encode("utf-8")
+    tree = parser.parse(code_bytes)
+    field_nodes = _get_all_fields_in_class(tree.root_node, class_signature.class_name)
+    for field_node in field_nodes:
+        variable_declarator = get_child(field_node, "variable_declarator")
+        if variable_declarator is None:
+            raise UnknownException("variable_declarator not found")
+        identifier = get_child(variable_declarator, "identifier")
+        if identifier is None:
+            raise UnknownException("identifier not found")
+        if identifier.text.decode("utf8") == field_name:
+            return _field_node_to_signature_string(field_node, code_bytes)
+    raise FieldNotFoundException()
+
+
+def _field_node_to_signature_string(field_node: Node, code_bytes: bytes) -> str:
+    start_byte_index = field_node.start_byte
+    end_byte_index = field_node.end_byte
+    field_code = code_bytes[start_byte_index:end_byte_index]
+    return field_code.decode("utf-8")
+
+
+def _get_all_fields_in_class(
+    root_node: Node,
+    class_name: str,
+) -> list[Node]:
+    query_string = f"""
+    (
+        class_declaration
+        (identifier) @name (#eq? @name "{class_name}")
+    ) @class"""
+
+    query = JAVA_LANGUAGE.query(query_string)
+    captures = query.captures(root_node)
+    class_node = captures.get("class")
+    if class_node is None:
+        raise ClassNotFoundException()
+    elif len(class_node) > 1:
+        raise MultipleClassesFoundCodeError()
+
+    class_node = class_node[0]
+    class_body = get_child(class_node, "class_body")
+    if class_body is None:
+        raise UnknownException()
+    return get_children_by_type(class_body, "field_declaration")
 
 
 def _method_node_to_signature_string(method_node: Node, code_bytes: bytes) -> str:

@@ -79,6 +79,12 @@ class ClassNotFoundException(CodeRetrievalException):
         super().__init__(self.message)
 
 
+class FieldNotFoundException(CodeRetrievalException):
+    def __init__(self, message="Field not found"):
+        self.message = message
+        super().__init__(self.message)
+
+
 class MultipleClassesFoundCodeError(CodeRetrievalException):
     def __init__(self, message="Multiple classes found with the same name"):
         self.message = message
