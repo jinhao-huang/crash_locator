@@ -168,8 +168,8 @@ def list_application_methods(
 
 
 def list_application_fields(
-    class_signature: ClassSignature,
     apk_name: str,
+    class_signature: ClassSignature,
 ) -> list[str]:
     """List all fields in a given class."""
     code_path = config.application_code_dir(apk_name) / class_signature.into_path()
