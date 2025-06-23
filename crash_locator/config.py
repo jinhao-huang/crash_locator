@@ -115,6 +115,15 @@ class Config(BaseSettings):
     def android_support_code_dir(self) -> Path:
         return self.resources_dir / "android_support_code" / "src"
 
+    def application_manifest_path(self, apk_name: str) -> Path:
+        return (
+            self.resources_dir
+            / "application_code"
+            / apk_name
+            / "resources"
+            / "AndroidManifest.xml"
+        )
+
     def application_code_dir(self, apk_name: str) -> Path:
         return self.resources_dir / "application_code" / apk_name / "sources"
 

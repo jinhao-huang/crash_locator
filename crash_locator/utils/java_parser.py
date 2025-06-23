@@ -212,6 +212,17 @@ def get_application_field(
     raise FieldNotFoundException()
 
 
+def get_application_manifest(
+    apk_name: str,
+) -> str:
+    """Get the application manifest for a given apk name."""
+    manifest_path = config.application_manifest_path(apk_name)
+    if not manifest_path.exists():
+        raise CodeFileNotFoundException()
+    with open(manifest_path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
 def _field_node_to_signature_string(field_node: Node, code_bytes: bytes) -> str:
     start_byte_index = field_node.start_byte
     end_byte_index = field_node.end_byte
