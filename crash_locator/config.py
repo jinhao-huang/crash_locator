@@ -23,7 +23,7 @@ class Config(BaseSettings):
     enable_notes: bool
     enable_candidate_reason: bool
     enable_candidate_correction: bool
-    reasoning_effort: ReasoningEffort
+    reasoning_effort: ReasoningEffort | None = None
 
     root_dir: Path = Path(__file__).parent.parent
 

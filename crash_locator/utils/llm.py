@@ -1,5 +1,6 @@
 from openai import AsyncOpenAI
 from openai import RateLimitError, InternalServerError, APIConnectionError
+from openai._types import NOT_GIVEN
 from crash_locator.config import config, run_statistic
 from crash_locator.my_types import ReportInfo, Candidate, MethodSignature
 from crash_locator.prompt import Prompt
@@ -64,7 +65,9 @@ async def _query_completion_api(conversation: Conversation) -> Response:
         messages=messages,
         timeout=240,
         stream=False,
-        reasoning_effort=config.reasoning_effort.value,
+        reasoning_effort=config.reasoning_effort.value
+        if config.reasoning_effort.value is not None
+        else NOT_GIVEN,
     )
     logger.debug(f"Raw response: {response}")
 
