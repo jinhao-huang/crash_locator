@@ -13,6 +13,7 @@ from crash_locator.exceptions import (
     CodeRetrievalException,
     UnExpectedResponseException,
     UnknownException,
+    InvalidSignatureException,
 )
 from crash_locator.utils.java_parser import get_framework_code
 from crash_locator.types.llm import (
@@ -207,7 +208,9 @@ async def _query_completion_api(
     )
     return Response(
         content=content,
-        tool_calls=[tool_call.model_dump() for tool_call in tool_calls],
+        tool_calls=[tool_call.model_dump() for tool_call in tool_calls]
+        if tool_calls is not None
+        else None,
         token_usage=token_usage,
         reasoning_content=reasoning_content,
     )
@@ -399,8 +402,8 @@ def _call_tool_factory(
                     return f"Android manifest:\n{manifest}"
                 case _:
                     raise UnknownException(f"Unknown tool: {tool_name}")
-        except CodeRetrievalException as e:
-            return f"Error: {e}"
+        except (CodeRetrievalException, InvalidSignatureException) as e:
+            return f"Error when calling tool {tool_name}: {e}"
 
     return call_tool
 
