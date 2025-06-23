@@ -54,20 +54,24 @@ class Prompt:
             else None
         )
         notes_prompt = (
-            "// Note: You need to be aware that errors may be related to multiple aspects, such as for the 'service is null' error, it could be due to the creation method not successfully creating it, or it might have been modified by other methods leading to premature release."
+            dedent("""\
+            // Note: You need to be aware that errors may be related to multiple aspects, such as for the 'service is null' error, it could be due to the creation method not successfully creating it, or it might have been modified by other methods leading to premature release.
+            // Note: You should only evaluate those candidates which is most likely to be the cause of the crash as true (usually the number of candidates is less than 3), otherwise you should evaluate it as false (is_crash_related=false).
+            """)
             if config.enable_notes
             else None
         )
 
         response_prompt = (
-            "For those candidate methods that likely to be related to the crash, you just reply 'Yes.'(Usually the numbers 'Yes' is less than 3) at the beginning, otherwise you reply 'No.', followed by a concise reason explanation of no more than two sentences after the period."
+            "After you fully understand the crash and the candidate, you should give a detailed reason about why you think the candidate is related to the crash or not. Then, evaluate whether the candidate is related to the crash by call `evaluate_candidate` tool."
             if config.enable_notes
-            else "For those candidate methods that are most likely to be related to the crash, you just reply 'Yes', otherwise you reply 'No' without any additional text."
+            else "After you fully understand the crash and the candidate, you should call `evaluate_candidate` tool to evaluate whether the candidate is related to the crash."
         )
 
         prompts = [
             "You are an Android expert that assist with locating the cause of the crash of Android application.",
             "You will be given a crash report first, then you need to analyze the crash report and the cause of the crash.",
+            "You can use tools to get the application code, manifest, methods, fields, etc. to help you analyze the crash.",
             constraint_prompt,
             notes_prompt,
             response_prompt,
@@ -156,13 +160,6 @@ class Prompt:
 
         if config.enable_candidate_reason:
             parts.append(Prompt.Part.candidate_reason(candidate))
-
-        response_note = (
-            "// Note: you just reply 'Yes.' if this candidate is directly related to the crash, otherwise you reply 'No.' at the beginning, followed by a concise reason explanation of no more than two sentences after the period. You should only reply 'yes' when you are very confident that the candidate is the cause of the crash."
-            if config.enable_notes
-            else "// Note: you just reply 'Yes' if this candidate is related to the crash, otherwise you reply 'No' without any additional text."
-        )
-        parts.append(response_note)
 
         if (
             config.enable_notes

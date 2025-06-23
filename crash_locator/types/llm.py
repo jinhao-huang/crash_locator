@@ -7,12 +7,15 @@ class Role(StrEnum):
     SYSTEM = "system"
     USER = "user"
     ASSISTANT = "assistant"
+    TOOL = "tool"
 
 
 class Message(BaseModel):
     role: Role
-    content: str
+    content: str | None = None
     reasoning_content: str | None = None
+    tool_calls: list[dict] | None = None
+    tool_call_id: str | None = None
 
 
 class Conversation(BaseModel):
@@ -25,13 +28,18 @@ class Conversation(BaseModel):
         return Conversation(messages=self.messages.copy())
 
     def dump_messages(self) -> list[dict]:
-        return [
-            {
-                "role": message.role,
-                "content": message.content,
-            }
-            for message in self.messages
-        ]
+        msgs = []
+        for message in self.messages:
+            msg = {}
+            msg["role"] = message.role
+            if message.content is not None:
+                msg["content"] = message.content
+            if message.tool_calls is not None:
+                msg["tool_calls"] = message.tool_calls
+            if message.tool_call_id is not None:
+                msg["tool_call_id"] = message.tool_call_id
+            msgs.append(msg)
+        return msgs
 
     def __getitem__(self, index: int) -> Message:
         return self.messages[index]
@@ -54,8 +62,9 @@ class TokenUsage(BaseModel):
 
 
 class Response(BaseModel):
-    content: str
+    content: str | None = None
     reasoning_content: str | None = None
+    tool_calls: list[dict] | None = None
     token_usage: TokenUsage
 
 

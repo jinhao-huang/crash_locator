@@ -2,9 +2,18 @@ from openai import AsyncOpenAI
 from openai import RateLimitError, InternalServerError, APIConnectionError
 from openai._types import NOT_GIVEN
 from crash_locator.config import config, run_statistic
-from crash_locator.my_types import ReportInfo, Candidate, MethodSignature
+from crash_locator.my_types import (
+    ReportInfo,
+    Candidate,
+    MethodSignature,
+    ClassSignature,
+)
 from crash_locator.prompt import Prompt
-from crash_locator.exceptions import UnExpectedResponseException
+from crash_locator.exceptions import (
+    CodeRetrievalException,
+    UnExpectedResponseException,
+    UnknownException,
+)
 from crash_locator.utils.java_parser import get_framework_code
 from crash_locator.types.llm import (
     Conversation,
@@ -27,10 +36,112 @@ from tenacity import (
 )
 import logging
 import re
+from openai.types.chat import ChatCompletionToolParam
+from textwrap import dedent
 
 logger = logging.getLogger(__name__)
 
 client = AsyncOpenAI(base_url=config.openai_base_url, api_key=config.openai_api_key)
+
+
+tools: list[ChatCompletionToolParam] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "evaluate_candidate",
+            "description": "After you fully understand the crash and the candidate, you should evaluate whether the candidate is related to the crash. If it is related, pass is_crash_related parameter as true, otherwise pass false. In the meantime, you should provide a detailed reason about why you think the candidate is related to the crash or not.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "is_crash_related": {"type": "boolean"},
+                    "reason": {"type": "string"},
+                },
+                "required": ["is_crash_related"],
+                "additionalProperties": False,
+            },
+            "strict": True,
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_application_code",
+            "description": "Pass a application method signature to get the code snippet of the method. The signature could be in two formats: 1. android.view.ViewRoot: void checkThread() 2. android.view.ViewRoot.checkThread. The format 1 is the full signature, and the format 2 is the short signature. the short signature may return multiple methods.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "method_signature": {"type": "string"},
+                },
+                "required": ["method_signature"],
+                "additionalProperties": False,
+            },
+            "strict": True,
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_application_methods",
+            "description": "Pass a application class signature to list all methods in the class. The signature example: android.view.ViewRoot",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "class_signature": {"type": "string"},
+                },
+                "required": ["class_signature"],
+                "additionalProperties": False,
+            },
+            "strict": True,
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_application_fields",
+            "description": "Pass a application class signature to list all fields in the class. The signature example: android.view.ViewRoot",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "class_signature": {"type": "string"},
+                },
+                "required": ["class_signature"],
+                "additionalProperties": False,
+            },
+            "strict": True,
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_application_field",
+            "description": "Pass a application class signature and field name to get the code snippet of the field. The signature example: android.view.ViewRoot",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "class_signature": {"type": "string"},
+                    "field_name": {"type": "string"},
+                },
+            },
+            "required": ["class_signature", "field_name"],
+            "additionalProperties": False,
+            "strict": True,
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_application_manifest",
+            "description": "Get the android manifest for the application.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+            },
+            "required": [],
+            "additionalProperties": False,
+            "strict": True,
+        },
+    },
+]
 
 
 async def _query_response_api(conversation: Conversation) -> Response:
@@ -42,9 +153,6 @@ async def _query_response_api(conversation: Conversation) -> Response:
         input=input,
         timeout=240,
         stream=False,
-        reasoning={
-            "effort": config.reasoning_effort.value,
-        },
     )
     logger.debug(f"Raw response: {response}")
 
@@ -56,7 +164,10 @@ async def _query_response_api(conversation: Conversation) -> Response:
     return Response(content=content, token_usage=token_usage)
 
 
-async def _query_completion_api(conversation: Conversation) -> Response:
+async def _query_completion_api(
+    conversation: Conversation,
+    tools: list[ChatCompletionToolParam] | None = None,
+) -> Response:
     from openai.types.chat import ChatCompletionMessageParam
 
     messages: list[ChatCompletionMessageParam] = conversation.dump_messages()
@@ -68,10 +179,12 @@ async def _query_completion_api(conversation: Conversation) -> Response:
         reasoning_effort=config.reasoning_effort.value
         if config.reasoning_effort is not None
         else NOT_GIVEN,
+        tools=tools if tools is not None else NOT_GIVEN,
     )
     logger.debug(f"Raw response: {response}")
 
     content = response.choices[0].message.content
+    tool_calls = response.choices[0].message.tool_calls
     reasoning_content = None
 
     # Check if reasoning content is in model_extra
@@ -94,6 +207,7 @@ async def _query_completion_api(conversation: Conversation) -> Response:
     )
     return Response(
         content=content,
+        tool_calls=[tool_call.model_dump() for tool_call in tool_calls],
         token_usage=token_usage,
         reasoning_content=reasoning_content,
     )
@@ -109,7 +223,10 @@ async def _query_completion_api(conversation: Conversation) -> Response:
     after=after_log(logger, logging.INFO),
     reraise=True,
 )
-async def _query_llm(conversation: Conversation) -> Conversation:
+async def _query_llm(
+    conversation: Conversation,
+    tools: list[ChatCompletionToolParam] | None = None,
+) -> Conversation:
     logger.info("Preparing to query LLM")
     logger.debug(f"Messages: {conversation}")
 
@@ -120,11 +237,12 @@ async def _query_llm(conversation: Conversation) -> Conversation:
             response = await _query_response_api(conversation)
         case APIType.COMPLETION:
             logger.info("Using completion API")
-            response = await _query_completion_api(conversation)
+            response = await _query_completion_api(conversation, tools)
         case _:
             raise ValueError(f"Invalid API type: {config.openai_api_type}")
 
     content = response.content
+    tool_calls = response.tool_calls
     token_usage = response.token_usage
     reasoning_content = response.reasoning_content
     run_statistic.add_token_usage(token_usage)
@@ -137,6 +255,7 @@ async def _query_llm(conversation: Conversation) -> Conversation:
             content=content,
             role=Role.ASSISTANT,
             reasoning_content=reasoning_content,
+            tool_calls=tool_calls,
         )
     )
 
@@ -157,7 +276,7 @@ async def _query_llm_with_retry(
         else:
             first_times = False
 
-        new_conversation = await _query_llm(conversation)
+        new_conversation = await _query_llm(conversation, tools)
         content = new_conversation.messages[-1].content
 
         if validate_func(content):
@@ -184,6 +303,14 @@ def _save_conversation(conversation: Conversation, base_dir: Path, name: str):
             if message.reasoning_content:
                 f.write("Reasoning_content:\n")
                 f.write(f"````text\n{message.reasoning_content}\n````\n")
+            if message.tool_calls:
+                f.write("Tool calls:\n")
+                for tool_call in message.tool_calls:
+                    f.write("```\n")
+                    f.write(f"Tool call id: {tool_call['id']}\n")
+                    f.write(f"Tool call name: {tool_call['function']['name']}\n")
+                    f.write(f"Tool call args: {tool_call['function']['arguments']}\n")
+                    f.write("```\n")
 
 
 def _save_retained_candidates(candidates: list[Candidate], dir: Path):
@@ -196,6 +323,114 @@ def _save_retained_candidates(candidates: list[Candidate], dir: Path):
             f,
             indent=4,
         )
+
+
+def _evaluate_candidate_function_factory(
+    retained_candidates: list[Candidate],
+    candidate: Candidate,
+) -> Callable[[bool, str], str]:
+    def evaluate_candidate(is_crash_related: bool, reason: str) -> str:
+        if is_crash_related:
+            retained_candidates.append(candidate)
+        return dedent(
+            f"""\
+            Candidate method {candidate.name} is evaluated as {is_crash_related}
+            Reason: {reason}
+            """
+        ).strip()
+
+    return evaluate_candidate
+
+
+def _call_tool_factory(
+    apk_name: str,
+    retained_candidates: list[Candidate],
+    candidate: Candidate,
+) -> Callable[[str, dict[str, str]], str]:
+    _evaluate_candidate = _evaluate_candidate_function_factory(
+        retained_candidates, candidate
+    )
+    from crash_locator.utils.java_parser import (
+        get_application_code,
+        list_application_methods,
+        list_application_fields,
+        get_application_field,
+        get_application_manifest,
+    )
+
+    def call_tool(tool_name: str, tool_args: dict) -> str:
+        try:
+            match tool_name:
+                case "evaluate_candidate":
+                    return _evaluate_candidate(
+                        bool(tool_args["is_crash_related"]), tool_args["reason"]
+                    )
+                case "get_application_code":
+                    code = get_application_code(
+                        apk_name,
+                        MethodSignature.from_str(tool_args["method_signature"]),
+                    )
+                    return f"Code snippet of method {tool_args['method_signature']}:\n{code}"
+                case "list_application_methods":
+                    methods = list_application_methods(
+                        apk_name, ClassSignature.from_str(tool_args["class_signature"])
+                    )
+                    formatted_methods = "\n".join(
+                        f"{i}. {method}" for i, method in enumerate(methods, 1)
+                    )
+                    return f"Methods in class {tool_args['class_signature']}:\n{formatted_methods}"
+                case "list_application_fields":
+                    fields = list_application_fields(
+                        apk_name, ClassSignature.from_str(tool_args["class_signature"])
+                    )
+                    formatted_fields = "\n".join(
+                        f"{i}. {field}" for i, field in enumerate(fields, 1)
+                    )
+                    return f"Fields in class {tool_args['class_signature']}:\n{formatted_fields}"
+                case "get_application_field":
+                    field = get_application_field(
+                        apk_name,
+                        ClassSignature.from_str(tool_args["class_signature"]),
+                        tool_args["field_name"],
+                    )
+                    return f"Code snippet of field {tool_args['field_name']}:\n{field}"
+                case "get_application_manifest":
+                    manifest = get_application_manifest(apk_name)
+                    return f"Android manifest:\n{manifest}"
+                case _:
+                    raise UnknownException(f"Unknown tool: {tool_name}")
+        except CodeRetrievalException as e:
+            return f"Error: {e}"
+
+    return call_tool
+
+
+async def _query_llm_with_tool_process(
+    conversation: Conversation,
+    tool_func: Callable[[str, dict], str],
+) -> Conversation:
+    is_evaluate_candidate = False
+    while not is_evaluate_candidate:
+        conversation = await _query_llm(conversation, tools)
+        if conversation[-1].tool_calls is not None:
+            for tool_call in conversation[-1].tool_calls:
+                tool_name = tool_call["function"]["name"]
+                if tool_name == "evaluate_candidate":
+                    is_evaluate_candidate = True
+
+                tool_args = json.loads(tool_call["function"]["arguments"])
+                logger.info(f"Tool call: {tool_name} with args: {tool_args}")
+
+                tool_call_id = tool_call["id"]
+                tool_result = tool_func(tool_name, tool_args)
+                logger.info("Got tool result")
+                logger.debug(f"Tool result: {tool_result}")
+                conversation.append(
+                    Message(
+                        content=tool_result, role=Role.TOOL, tool_call_id=tool_call_id
+                    )
+                )
+    return conversation
 
 
 async def _query_base_candidates(
@@ -219,14 +454,10 @@ async def _query_base_candidates(
                 role=Role.USER,
             )
         )
-        conversation = await _query_llm_with_retry(
+        conversation = await _query_llm_with_tool_process(
             conversation,
-            3,
-            lambda x: x.strip().startswith("Yes") or x.strip().startswith("No"),
+            _call_tool_factory(report_info.apk_name, retained_candidates, candidate),
         )
-
-        if "Yes" in conversation.messages[-1].content:
-            retained_candidates.append(candidate)
 
     _save_conversation(
         conversation,
@@ -255,13 +486,11 @@ async def _query_extra_candidates(
                 role=Role.USER,
             )
         )
-        conversation = await _query_llm_with_retry(
+        conversation = await _query_llm_with_tool_process(
             conversation,
-            3,
-            lambda x: x.strip().startswith("Yes") or x.strip().startswith("No"),
+            _call_tool_factory(report_info.apk_name, retained_candidates, candidate),
         )
-        if "Yes" in conversation.messages[-1].content:
-            retained_candidates.append(candidate)
+
         _save_conversation(
             conversation,
             config.result_report_filter_dir(report_info.apk_name),
