@@ -9,14 +9,54 @@
             "type": "debugpy",
             "request": "launch",
             "module": "crash_locator.__main__",
-            "args": ["--debug", "true", "--max_workers", "1", "--preset", "baseline"]
+            "args": [
+                "--debug",
+                "true",
+                "--max_workers",
+                "1",
+                "--preset",
+                "baseline"
+            ]
+        },
+        {
+            "name": "crash_locator full debug",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "crash_locator.__main__",
+            "args": [
+                "--debug",
+                "true",
+                "--max_workers",
+                "1",
+                "--preset",
+                "full",
+                "--enable_extract_constraint",
+                "false"
+            ]
         },
         {
             "name": "crash_locator pre_check module",
             "type": "debugpy",
             "request": "launch",
             "module": "crash_locator.pre_check",
-            "args": ["--debug", "true"]
-        }
+            "args": [
+                "--debug",
+                "true",
+                "--preset",
+                "baseline"
+            ]
+        },
+        {
+            "name": "java_parser debug",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "crash_locator.utils.java_parser",
+            "args": [
+                "--debug",
+                "true",
+                "--preset",
+                "baseline"
+            ]
+        },
     ]
 }
