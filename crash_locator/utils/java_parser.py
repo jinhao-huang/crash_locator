@@ -129,9 +129,9 @@ def get_framework_code(
         raise CodeFileNotFoundException()
 
 
-def list_application_methods_by_class(
-    class_signature: ClassSignature,
+def list_application_methods(
     apk_name: str,
+    class_signature: ClassSignature,
 ) -> list[str]:
     """List all methods in a given class."""
     code_path = config.application_code_dir(apk_name) / class_signature.into_path()
