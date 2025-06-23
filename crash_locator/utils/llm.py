@@ -66,7 +66,7 @@ async def _query_completion_api(conversation: Conversation) -> Response:
         timeout=240,
         stream=False,
         reasoning_effort=config.reasoning_effort.value
-        if config.reasoning_effort.value is not None
+        if config.reasoning_effort is not None
         else NOT_GIVEN,
     )
     logger.debug(f"Raw response: {response}")

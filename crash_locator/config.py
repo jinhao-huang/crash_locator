@@ -142,14 +142,12 @@ class Config(BaseSettings):
                 "enable_notes": False,
                 "enable_candidate_reason": False,
                 "enable_candidate_correction": False,
-                "reasoning_effort": ReasoningEffort.MEDIUM,
             },
             "full": {
                 "enable_extract_constraint": True,
                 "enable_notes": True,
                 "enable_candidate_reason": True,
                 "enable_candidate_correction": True,
-                "reasoning_effort": ReasoningEffort.MEDIUM,
             },
         }
 

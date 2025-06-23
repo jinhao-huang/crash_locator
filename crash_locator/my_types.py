@@ -85,7 +85,7 @@ class RunStatistic(BaseModel):
     class RunConfig(BaseModel):
         class ModelInfo(BaseModel):
             model_name: str
-            reasoning_effort: ReasoningEffort
+            reasoning_effort: ReasoningEffort | None = None
 
         preset: str | None
         enable_extract_constraint: bool
