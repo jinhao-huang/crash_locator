@@ -320,6 +320,9 @@ class MethodSignature(BaseModel):
             class_name = f"{class_name}.{self.inner_class.replace('$', '.')}"
         return class_name
 
+    def into_basic_name(self) -> str:
+        return f"{self.full_class_name()}.{self.method_name}"
+
     def class_list(self) -> list[str]:
         class_list = [self.class_name]
         if self.inner_class:
@@ -371,6 +374,7 @@ class ReasonTypeLiteral(StrEnum):
     NOT_OVERRIDE_METHOD_EXECUTED = "Not Override Method 2 (Executed)"
     FRAMEWORK_RECALL = "Framework Recall"
     KEY_VAR_3 = "Key Variable Related 3"
+    MANUAL_SUPPLEMENT = "Manual Supplement"
 
 
 class KeyVarTerminalReason(CandidateReason):
@@ -502,6 +506,13 @@ class KeyVar3Reason(CandidateReason):
             """)
 
 
+class ManualSupplementReason(CandidateReason):
+    reason_type: Literal[ReasonTypeLiteral.MANUAL_SUPPLEMENT] = (
+        ReasonTypeLiteral.MANUAL_SUPPLEMENT
+    )
+    reason: str
+
+
 class Candidate(BaseModel):
     name: str
     signature: MethodSignature
@@ -516,6 +527,7 @@ class Candidate(BaseModel):
         | NotOverrideMethodExecutedReason
         | FrameworkRecallReason
         | KeyVar3Reason
+        | ManualSupplementReason
     ) = Field(discriminator="reason_type")
 
 

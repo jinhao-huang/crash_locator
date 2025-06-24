@@ -58,17 +58,17 @@ class Prompt:
             When you first receive the crash message and stack trace, your immediate goal is to perform a comprehensive initial analysis. Do not evaluate anything yet. Your analysis should be a detailed, comprehensive thought process where you:
 
             - Step 1 Analyze the Stack Trace
-            + Read the stack trace from bottom to top to understand the entire call flow.
+                + Read the stack trace from bottom to top to understand the entire call flow.
 
             - Step 2 Formulate a Hypothesis
-            + Based on the exception type and the call flow, form a preliminary hypothesis. Identify:
-            + A likely Immediate Cause: The application method at the top of the stack trace that directly caused the crash.
-            + A potential Root Cause: The method further down the stack trace where the problematic data or state (e.g., the null value) likely originated.
+                + Based on the exception type and the call flow, form a preliminary hypothesis. Identify:
+                + A likely Immediate Cause: The application method at the top of the stack trace that directly caused the crash.
+                + A potential Root Cause: The method further down the stack trace where the problematic data or state (e.g., the null value) likely originated.
 
             - Step 3 Identify Information Gaps & Plan Tool Use: Consider what information you would need to confirm your hypothesis. While the user may provide code snippets, think about how you would use your tools if that information were missing. For example:
-            + If a key method in the stack trace is not provided, you would use get_application_code to retrieve its source.
-            + If you need to understand how a class interacts with others, you would use list_application_methods or list_application_fields.
-            + If you suspect a lifecycle issue or a problem with component registration (like a Service or BroadcastReceiver), you would use get_application_manifest.
+                + If a key method in the stack trace is not provided, you would use get_application_code to retrieve its source.
+                + If you need to understand how a class interacts with others, you would use list_application_methods or list_application_fields.
+                + If you suspect a lifecycle issue or a problem with component registration (like a Service or BroadcastReceiver), you would use get_application_manifest.
 
             You will keep this hypothesis in mind for the entire duration of the chat.
 
@@ -79,22 +79,37 @@ class Prompt:
             - Step 1 Recall Your Hypothesis: Briefly recall your analysis of the Immediate Cause and Root Cause.
 
             - Step 2 Classify the Candidate: Compare the current candidate method against your hypothesis and classify it into one of the following categories:
-            + The Root Cause: Is this the method where the problematic data was first created? (e.g., from a failed parsing, a network call returning no data, etc.).
-            + The Immediate Cause: Is this the method that directly used the bad data and triggered the exception?
-            + The Propagation Path: Is this method simply passing the bad data from an earlier call to a later one?
+                + The Root Cause: Is this the method where the problematic data was first created? (e.g., from a failed parsing, a network call returning no data, etc.).
+                + The Immediate Cause: Is this the method that directly used the bad data and triggered the exception?
+                + The Propagation Path: Is this method simply passing the bad data from an earlier call to a later one?
 
             - Step 3 Construct Your Reasoning: Based on your classification, formulate a clear and concise reason.
-
-            + If it's a critical method (A or B), explain why it's the root or immediate cause.
-            + If it's on the propagation path (C), state this clearly, explaining that while it's in the call stack, it's not the source of the problem and shouldn't be the focus of the fix.
+                + If it's a critical method (A or B), explain why it's the root or immediate cause.
+                + If it's on the propagation path (C), state this clearly, explaining that while it's in the call stack, it's not the source of the problem and shouldn't be the focus of the fix.
 
             - Step 4 Call evaluate_candidate: Based on your classification, call the evaluate_candidate tool with the following strict rules:
-
-            + MUST evaluate as is_crash_related: true if the method is classified as The Root Cause or The Immediate Cause.
-            + MUST evaluate as is_crash_related: false if the method is classified as The Propagation Path.
-            + Constraint: The total number of candidates evaluated as true across the entire conversation should not exceed 2, as there are typically only one root cause and one immediate cause.
+                + MUST evaluate as is_crash_related: true if the method is classified as The Root Cause or The Immediate Cause.
+                + MUST evaluate as is_crash_related: false if the method is classified as The Propagation Path.
+                + Constraint: The total number of candidates evaluated as true across the entire conversation should not exceed 2, as there are typically only one root cause and one immediate cause.
 
             Await the next candidate and repeat this process.
+
+            # Phase 3: Final Review and Completion (After All Candidates Are Evaluated)
+
+            After you have evaluated the final candidate from the user, you must initiate this final phase.
+
+            - Step 1: Review Your Hypothesis vs. Findings
+                + Compare your initial hypothesis (the likely Root Cause and Immediate Cause) against the methods that were evaluated as true.
+
+            - Step 2: Seek Missing Critical Methods
+                + If your hypothesized critical methods were not among the candidates evaluated as true, you must now take action.
+                + Identify the method signature(s) that you believe are the true critical methods. These methods may out of the original stack trace, you can use `list_application_methods`, `get_application_code`, `list_application_fields` to find them. (Note: you should always assume framework and java methods are correct) 
+                + Use the add_buggy_method_candidate tool to add one of these methods to the candidate list.
+
+            - Step 3: Finish the Investigation
+                + If and only if you have evaluated all user-provided candidates AND you have confirmed that your hypothesized critical methods have been found and evaluated (i.e., you do not need to add any new candidates), you must call the finish_investigation tool to conclude the analysis. This should be your final action.
+
+
         """).strip()
 
         return prompt
@@ -191,6 +206,30 @@ class Prompt:
             )
 
         return Prompt.Part.merger(parts)
+
+    @staticmethod
+    def FINAL_REVIEW_USER_PROMPT(
+        report_info: ReportInfo, retained_candidates: list[Candidate]
+    ) -> str:
+        prompt_template = Template(
+            dedent("""\
+                All candidates have been evaluated. You must now begin Phase 3: Final Review and Completion, as outlined in your instructions.
+                
+                Here are the current candidates that you have evaluated as true (Do not add these candidates to the list again):
+                ```
+                $candidates
+                ```
+            """).strip()
+        )
+
+        return prompt_template.substitute(
+            candidates="\n".join(
+                [
+                    f"{index}. {candidate.signature}"
+                    for index, candidate in enumerate(retained_candidates, 1)
+                ]
+            )
+        )
 
     EXTRACTOR_SYSTEM_PROMPT: str = dedent("""\
         Your task is to extract the precondition constraint of the target exception in Java methods and convert them into constraint related to method parameters or class field.

@@ -7,6 +7,8 @@ from crash_locator.my_types import (
     Candidate,
     MethodSignature,
     ClassSignature,
+    ReasonTypeLiteral,
+    ManualSupplementReason,
 )
 from crash_locator.prompt import Prompt
 from crash_locator.exceptions import (
@@ -15,6 +17,8 @@ from crash_locator.exceptions import (
     UnknownException,
     InvalidSignatureException,
 )
+from crash_locator.my_types import PackageType
+from crash_locator.utils.helper import get_method_type
 from crash_locator.utils.java_parser import get_framework_code
 from crash_locator.types.llm import (
     Conversation,
@@ -61,6 +65,29 @@ tools: list[ChatCompletionToolParam] = [
                 "additionalProperties": False,
             },
             "strict": True,
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "add_buggy_method_candidate",
+            "description": "When you found a buggy method which is related to the crash, you should add it to the list of candidates by calling this tool. The method signature should be include class name, return type, method name and parameters in the format of `android.view.ViewRoot: void checkThread()`. In the meantime, you should provide a detailed reason about why you think the method is buggy.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "method_signature": {"type": "string"},
+                    "reason": {"type": "string"},
+                },
+                "required": ["method_signature", "reason"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "finish_investigation",
+            "description": "When you evaluate all candidates and add all buggy method which is not in candidates to the list of candidates, you should call this tool to finish the investigation.",
+            "parameters": {},
         },
     },
     {
@@ -330,9 +357,12 @@ def _save_retained_candidates(candidates: list[Candidate], dir: Path):
 
 def _evaluate_candidate_function_factory(
     retained_candidates: list[Candidate],
-    candidate: Candidate,
+    candidate: Candidate | None,
 ) -> Callable[[bool, str], str]:
     def evaluate_candidate(is_crash_related: bool, reason: str) -> str:
+        if candidate is None:
+            return "You have no candidate to evaluate"
+
         if is_crash_related:
             retained_candidates.append(candidate)
         return dedent(
@@ -345,13 +375,54 @@ def _evaluate_candidate_function_factory(
     return evaluate_candidate
 
 
+def _add_buggy_method_candidate_function_factory(
+    retained_candidates: list[Candidate],
+) -> Callable[[str], str]:
+    def add_buggy_method_candidate(method_signature: str, reason: str) -> str:
+        signature = MethodSignature.from_str(method_signature)
+
+        for candidate in retained_candidates:
+            if candidate.signature == signature:
+                return f"Buggy method {method_signature} is already in the list of candidates, do not add it again"
+
+        match get_method_type(method_signature):
+            case PackageType.ANDROID | PackageType.ANDROID_SUPPORT:
+                return (
+                    "Android framework method is not allowed to be added as a candidate"
+                )
+            case PackageType.JAVA:
+                return "Java framework method is not allowed to be added as a candidate"
+            case _:
+                pass
+
+        retained_candidates.append(
+            Candidate(
+                name=signature.into_basic_name(),
+                signature=signature,
+                extend_hierarchy=[],
+                reasons=(
+                    ManualSupplementReason(
+                        reason_type=ReasonTypeLiteral.MANUAL_SUPPLEMENT,
+                        reason=reason,
+                    )
+                ),
+            )
+        )
+        return f"Buggy method {method_signature} is added to the list of candidates"
+
+    return add_buggy_method_candidate
+
+
 def _call_tool_factory(
     apk_name: str,
     retained_candidates: list[Candidate],
-    candidate: Candidate,
+    candidate: Candidate | None = None,
 ) -> Callable[[str, dict[str, str]], str]:
     _evaluate_candidate = _evaluate_candidate_function_factory(
         retained_candidates, candidate
+    )
+    _add_buggy_method_candidate = _add_buggy_method_candidate_function_factory(
+        retained_candidates
     )
     from crash_locator.utils.java_parser import (
         get_application_code,
@@ -368,6 +439,12 @@ def _call_tool_factory(
                     return _evaluate_candidate(
                         bool(tool_args["is_crash_related"]), tool_args["reason"]
                     )
+                case "add_buggy_method_candidate":
+                    return _add_buggy_method_candidate(
+                        tool_args["method_signature"], tool_args["reason"]
+                    )
+                case "finish_investigation":
+                    return "You have finished the investigation"
                 case "get_application_code":
                     code = get_application_code(
                         apk_name,
@@ -411,15 +488,16 @@ def _call_tool_factory(
 async def _query_llm_with_tool_process(
     conversation: Conversation,
     tool_func: Callable[[str, dict], str],
+    end_tool_call_name: str,
 ) -> Conversation:
-    is_evaluate_candidate = False
-    while not is_evaluate_candidate:
+    is_end = False
+    while not is_end:
         conversation = await _query_llm(conversation, tools)
         if conversation[-1].tool_calls is not None:
             for tool_call in conversation[-1].tool_calls:
                 tool_name = tool_call["function"]["name"]
-                if tool_name == "evaluate_candidate":
-                    is_evaluate_candidate = True
+                if tool_name == end_tool_call_name:
+                    is_end = True
 
                 tool_args = json.loads(tool_call["function"]["arguments"])
                 logger.info(f"Tool call: {tool_name} with args: {tool_args}")
@@ -460,6 +538,7 @@ async def _query_base_candidates(
         conversation = await _query_llm_with_tool_process(
             conversation,
             _call_tool_factory(report_info.apk_name, retained_candidates, candidate),
+            "evaluate_candidate",
         )
 
     _save_conversation(
@@ -492,6 +571,7 @@ async def _query_extra_candidates(
         conversation = await _query_llm_with_tool_process(
             conversation,
             _call_tool_factory(report_info.apk_name, retained_candidates, candidate),
+            "evaluate_candidate",
         )
 
         _save_conversation(
@@ -500,6 +580,35 @@ async def _query_extra_candidates(
             f"extra_candidates_{index + 1}",
         )
 
+    return retained_candidates
+
+
+async def _query_final_review(
+    report_info: ReportInfo,
+    retained_candidates: list[Candidate],
+    base_messages: Conversation,
+) -> list[Candidate]:
+    logger.info(f"Starting final review for {report_info.apk_name}")
+
+    conversation = base_messages.messages_copy()
+
+    conversation.append(
+        Message(
+            content=Prompt.FINAL_REVIEW_USER_PROMPT(report_info, retained_candidates),
+            role=Role.USER,
+        )
+    )
+    conversation = await _query_llm_with_tool_process(
+        conversation,
+        _call_tool_factory(report_info.apk_name, retained_candidates),
+        "finish_investigation",
+    )
+
+    _save_conversation(
+        conversation,
+        config.result_report_filter_dir(report_info.apk_name),
+        "final_review",
+    )
     return retained_candidates
 
 
@@ -512,6 +621,9 @@ async def _llm_filter_candidate(
         report_info, constraint
     )
     retained_candidates = await _query_extra_candidates(
+        report_info, retained_candidates, base_messages
+    )
+    retained_candidates = await _query_final_review(
         report_info, retained_candidates, base_messages
     )
 
