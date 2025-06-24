@@ -16,6 +16,8 @@ class PreCheckRawStatistic(BaseModel):
     buggy_method_candidates_exist: int = 0
     buggy_method_candidates_not_exist: int = 0
     buggy_method_candidates_not_exist_detail: list[str] = Field(default_factory=list)
+    one_candidate_report_count: int = 0
+    one_candidate_report_buggy_method_count: int = 0
 
 
 class PreCheckStatistic(BaseModel):

@@ -460,9 +460,21 @@ def _fix_candidate_signature(report: ReportInfo) -> None:
 
 
 def _raw_statistic(report: dict):
-    statistic.raw_statistic.total_candidates += len(
+    candidate_count = len(
         report["Fault Localization by CrashTracker"]["Buggy Method Candidates"]
     )
+    if candidate_count == 1:
+        statistic.raw_statistic.one_candidate_report_count += 1
+        if "Labeled Buggy Method" in report["Crash Info in Dataset"]:
+            if (
+                report["Crash Info in Dataset"]["Labeled Buggy Method"]
+                == report["Fault Localization by CrashTracker"][
+                    "Buggy Method Candidates"
+                ][0]["Candidate Name"]
+            ):
+                statistic.raw_statistic.one_candidate_report_buggy_method_count += 1
+
+    statistic.raw_statistic.total_candidates += candidate_count
 
     if "Labeled Buggy Method" in report["Crash Info in Dataset"]:
         statistic.raw_statistic.total_buggy_method_candidates += 1
