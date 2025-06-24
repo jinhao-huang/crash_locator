@@ -32,8 +32,8 @@ class NoBuggyMethodCandidatesException(PreCheckException):
 
 
 class CandidateCodeNotFoundException(PreCheckException):
-    def __init__(self, candidate_name: str):
-        self.message = f"Candidate code not found for {candidate_name}"
+    def __init__(self, candidate_name: str, reason: str):
+        self.message = f"Candidate code not found for {candidate_name}, {reason}"
         super().__init__(self.message)
 
 

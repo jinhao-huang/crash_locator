@@ -407,8 +407,10 @@ def _check_candidate_code_exist(report: ReportInfo) -> None:
     for candidate in report.candidates[:]:
         try:
             get_candidate_code(report.apk_name, candidate)
-        except CodeRetrievalException:
-            raise CandidateCodeNotFoundException(str(candidate.signature))
+        except CodeRetrievalException as e:
+            raise CandidateCodeNotFoundException(
+                str(candidate.signature), str(e)
+            ) from e
         except ValueError:
             if candidate.reasons.reason_type != ReasonTypeLiteral.NOT_OVERRIDE_METHOD:
                 report.candidates.remove(candidate)
