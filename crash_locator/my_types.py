@@ -558,11 +558,14 @@ class ReportInfo(BaseModel):
         The candidates that are in stack trace
         """
         name_to_candidate = {candidate.name: candidate for candidate in self.candidates}
-        return [
-            name_to_candidate[method]
-            for method in self.stack_trace_short_api
-            if method in name_to_candidate
-        ]
+        candidates = []
+        for method in self.stack_trace_short_api:
+            if (
+                method in name_to_candidate
+                and name_to_candidate[method] not in candidates
+            ):
+                candidates.append(name_to_candidate[method])
+        return candidates
 
     @property
     def extra_candidates(self) -> list[Candidate]:
