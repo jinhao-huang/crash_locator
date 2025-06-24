@@ -5,7 +5,6 @@ from pathlib import Path
 from crash_locator.config import config
 from crash_locator.my_types import (
     MethodSignature,
-    PackageType,
     Candidate,
     ClassSignature,
 )
@@ -40,7 +39,6 @@ def get_candidate_code(
     Recursively search the method by the extend hierarchy.
 
     Raises:
-        ValueError: The code is not in the application code directory.
         NoMethodFoundCodeError: No method found in the file.
         MultipleMethodsCodeError: Multiple methods found in the file.
         MethodFileNotFoundException: The file does not exist.
@@ -65,8 +63,6 @@ def get_candidate_code(
             parameters=candidate.signature.parameters,
             return_type=candidate.signature.return_type,
         )
-        if PackageType.get_package_type(method_signature) != PackageType.APPLICATION:
-            raise ValueError("The code is not in the application code directory.")
         try:
             return _get_method_code_in_file(
                 config.application_code_dir(apk_name) / method_signature.into_path(),
