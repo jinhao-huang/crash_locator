@@ -10,7 +10,6 @@ from crash_locator.my_types import (
     ClassSignature,
 )
 from crash_locator.exceptions import (
-    MultipleMethodsCodeError,
     NoMethodFoundCodeError,
     UnknownException,
     ClassNotFoundException,
@@ -310,12 +309,21 @@ def _get_method_code_in_file(
     if method is None or len(method) == 0:
         raise NoMethodFoundCodeError()
     elif len(method) > 1:
-        raise MultipleMethodsCodeError()
+        codes = []
+        for method_node in method:
+            codes.append(_get_method_code_by_node(method_node, code_lines))
+        return (
+            "Multiple methods found, one of them may be the method you want:\n"
+            + "\n\n".join(codes)
+        )
     else:
-        method = method[0]
+        return _get_method_code_by_node(method[0], code_lines)
 
-    method_code = code_lines[method.start_point.row : method.end_point.row + 1]
-    return "".join(method_code)
+
+def _get_method_code_by_node(method_node: Node, code_lines: list[str]) -> str:
+    start_row = method_node.start_point.row
+    end_row = method_node.end_point.row
+    return "".join(code_lines[start_row : end_row + 1])
 
 
 def _filter_methods(
