@@ -218,6 +218,17 @@ def get_application_manifest(
         return f.read()
 
 
+def get_application_strings(
+    apk_name: str,
+) -> str:
+    """Get the application strings for a given apk name."""
+    strings_path = config.application_strings_path(apk_name)
+    if not strings_path.exists():
+        raise CodeFileNotFoundException()
+    with open(strings_path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
 def _field_node_to_signature_string(field_node: Node, code_bytes: bytes) -> str:
     start_byte_index = field_node.start_byte
     end_byte_index = field_node.end_byte

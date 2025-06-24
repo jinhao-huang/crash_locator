@@ -124,6 +124,17 @@ class Config(BaseSettings):
             / "AndroidManifest.xml"
         )
 
+    def application_strings_path(self, apk_name: str) -> Path:
+        return (
+            self.resources_dir
+            / "application_code"
+            / apk_name
+            / "resources"
+            / "res"
+            / "values"
+            / "strings.xml"
+        )
+
     def application_code_dir(self, apk_name: str) -> Path:
         return self.resources_dir / "application_code" / apk_name / "sources"
 

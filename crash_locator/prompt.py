@@ -70,6 +70,7 @@ class Prompt:
                 + If a key method in the stack trace is not provided, you would use get_application_code to retrieve its source.
                 + If you need to understand how a class interacts with others, you would use list_application_methods or list_application_fields.
                 + If you suspect a lifecycle issue or a problem with component registration (like a Service or BroadcastReceiver), you would use get_application_manifest.
+                + If you suspect a crash is related to a missing or malformed string resource (e.g., a Resources$NotFoundException), you would use get_application_strings to inspect the strings.xml file.
 
             You will keep this hypothesis in mind for the entire duration of the chat.
 

@@ -169,6 +169,20 @@ tools: list[ChatCompletionToolParam] = [
             "strict": True,
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_application_strings",
+            "description": "Get the strings.xml file for the application.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+            },
+            "required": [],
+            "additionalProperties": False,
+            "strict": True,
+        },
+    },
 ]
 
 
@@ -443,6 +457,7 @@ def _call_tool_factory(
         list_application_fields,
         get_application_field,
         get_application_manifest,
+        get_application_strings,
     )
 
     def call_tool(tool_name: str, tool_args: dict) -> str:
@@ -490,6 +505,9 @@ def _call_tool_factory(
                 case "get_application_manifest":
                     manifest = get_application_manifest(apk_name)
                     return f"Android manifest:\n{manifest}"
+                case "get_application_strings":
+                    strings = get_application_strings(apk_name)
+                    return f"Application strings:\n{strings}"
                 case _:
                     raise UnknownException(f"Unknown tool: {tool_name}")
         except (CodeRetrievalException, InvalidSignatureException) as e:
