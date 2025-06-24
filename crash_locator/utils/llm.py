@@ -413,6 +413,18 @@ def _add_buggy_method_candidate_function_factory(
     return add_buggy_method_candidate
 
 
+def _finish_investigation_function_factory(
+    candidate: Candidate | None,
+) -> Callable[[str], str]:
+    def finish_investigation() -> str:
+        if candidate is None:
+            return "You have finished the investigation"
+        else:
+            return f"You cannot finish the investigation because you have not evaluated all the candidates yet. Please evaluate the candidate {candidate.name} first."
+
+    return finish_investigation
+
+
 def _call_tool_factory(
     apk_name: str,
     retained_candidates: list[Candidate],
@@ -424,6 +436,7 @@ def _call_tool_factory(
     _add_buggy_method_candidate = _add_buggy_method_candidate_function_factory(
         retained_candidates
     )
+    _finish_investigation = _finish_investigation_function_factory(candidate)
     from crash_locator.utils.java_parser import (
         get_application_code,
         list_application_methods,
@@ -444,7 +457,7 @@ def _call_tool_factory(
                         tool_args["method_signature"], tool_args["reason"]
                     )
                 case "finish_investigation":
-                    return "You have finished the investigation"
+                    return _finish_investigation()
                 case "get_application_code":
                     code = get_application_code(
                         apk_name,
