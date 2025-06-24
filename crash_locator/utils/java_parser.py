@@ -279,6 +279,9 @@ def _get_method_code_in_file(
     # TODO: handle <init> method
     method_name = method_signature.method_name
 
+    if method_signature == MethodSignature.from_str("dalvik.system.NativeStart.main"):
+        return "This is a android native method, you can not get the code of it"
+
     if not file_path.exists():
         raise CodeFileNotFoundException()
 
