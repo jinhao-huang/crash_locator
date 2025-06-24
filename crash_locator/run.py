@@ -149,7 +149,10 @@ async def _process_report(
         _copy_report(report_name)
 
         try:
-            retained_candidates = await filter_candidate(report_info)
+            (
+                retained_candidates_before_final_review,
+                retained_candidates,
+            ) = await filter_candidate(report_info)
 
             if config.enable_candidate_correction:
                 _candidate_correction(report_info, retained_candidates)
@@ -172,7 +175,11 @@ async def _process_report(
                 report_name,
                 ProcessedReportInfo(
                     total_candidates_count=len(report_info.candidates),
-                    retained_candidates_count=len(retained_candidates),
+                    retained_candidates_count=len(
+                        retained_candidates_before_final_review
+                    ),
+                    supplementary_candidates_count=len(retained_candidates)
+                    - len(retained_candidates_before_final_review),
                     is_buggy_method_filtered=_is_buggy_method_filtered(
                         report_info, retained_candidates
                     ),

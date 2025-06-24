@@ -645,7 +645,7 @@ async def _query_final_review(
 
 async def _llm_filter_candidate(
     report_info: ReportInfo, constraint: str | None = None
-) -> list[Candidate]:
+) -> tuple[list[Candidate], list[Candidate]]:
     logger.info(f"Starting llm candidate filtering for {report_info.apk_name}")
 
     retained_candidates, base_messages = await _query_base_candidates(
@@ -654,6 +654,7 @@ async def _llm_filter_candidate(
     retained_candidates = await _query_extra_candidates(
         report_info, retained_candidates, base_messages
     )
+    retained_candidates_before_final_review = retained_candidates.copy()
     retained_candidates = await _query_final_review(
         report_info, retained_candidates, base_messages
     )
@@ -665,7 +666,7 @@ async def _llm_filter_candidate(
     logger.info(
         f"Candidate filtering completed, before: {len(report_info.candidates)}, after: {len(retained_candidates)}"
     )
-    return retained_candidates
+    return retained_candidates_before_final_review, retained_candidates
 
 
 def _constraint_parser(message: str) -> str | None:
@@ -767,7 +768,9 @@ async def _construct_constraint(report_info: ReportInfo) -> str:
     return constraint
 
 
-async def filter_candidate(report_info: ReportInfo) -> list[Candidate]:
+async def filter_candidate(
+    report_info: ReportInfo,
+) -> tuple[list[Candidate], list[Candidate]]:
     logger.info(f"Starting candidate filtering for {report_info.apk_name}")
 
     constraint = None

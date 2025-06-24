@@ -60,6 +60,7 @@ class ProcessedReportInfo(BaseModel):
     report_status: Literal[ReportStatus.FINISHED] = ReportStatus.FINISHED
     total_candidates_count: int
     retained_candidates_count: int
+    supplementary_candidates_count: int
     is_buggy_method_filtered: bool
 
     @property
@@ -108,6 +109,8 @@ class RunStatistic(BaseModel):
     filtered_buggy_method: int = 0
     # Count of filtered correct candidates that are not buggy method
     valid_filtered_candidates: int = 0
+    # Count of supplementary candidates
+    supplementary_candidates: int = 0
 
     # Count of skipped reports
     skipped_reports: int = 0
@@ -173,6 +176,9 @@ class RunStatistic(BaseModel):
                     )
                     self.retained_candidates += (
                         finished_report.retained_candidates_count
+                    )
+                    self.supplementary_candidates += (
+                        finished_report.supplementary_candidates_count
                     )
                     if finished_report.is_buggy_method_filtered:
                         self.filtered_buggy_method += 1
