@@ -1,5 +1,6 @@
 from crash_locator.my_types import ReportInfo, Candidate
 from crash_locator.utils.java_parser import get_candidate_code
+from crash_locator.exceptions import NoMethodFoundCodeError, CodeFileNotFoundException
 from crash_locator.my_types import ReasonTypeLiteral
 from crash_locator.types.llm import Conversation, Message, Role
 from textwrap import dedent
@@ -190,7 +191,10 @@ class Prompt:
             Prompt.Part.candidate_method(candidate),
         ]
         if candidate.reasons.reason_type != ReasonTypeLiteral.NOT_OVERRIDE_METHOD:
-            code = get_candidate_code(report_info.apk_name, candidate)
+            try:
+                code = get_candidate_code(report_info.apk_name, candidate)
+            except (NoMethodFoundCodeError, CodeFileNotFoundException):
+                code = "Cannot find the code of this candidate, please use other information and tools to evaluate it."
             parts.append(Prompt.Part.method_code(code, candidate.signature.class_name))
 
         if config.enable_candidate_reason:
