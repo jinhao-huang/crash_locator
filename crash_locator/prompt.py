@@ -48,36 +48,56 @@ class Prompt:
 
     @staticmethod
     def _FILTER_CANDIDATE_SYSTEM(constraint: str | None = None) -> str:
-        constraint_prompt = (
-            "Additionally, we also provide a constraint which is met when the exception is triggered."
-            if constraint
-            else None
-        )
-        notes_prompt = (
-            dedent("""\
-            // Note: You need to be aware that errors may be related to multiple aspects, such as for the 'service is null' error, it could be due to the creation method not successfully creating it, or it might have been modified by other methods leading to premature release.
-            // Note: You should only evaluate those candidates which is most likely to be the cause of the crash as true (usually the number of candidates is less than 3), otherwise you should evaluate it as false (is_crash_related=false).
-            """)
-            if config.enable_notes
-            else None
-        )
+        prompt = dedent("""\
+            You are an expert Android crash analyst and a methodical assistant. Your mission is to act as an expert developer to precisely identify the one or two critical methods responsible for a crash, guiding the user to the fastest possible fix.
 
-        response_prompt = (
-            "After you fully understand the crash and the candidate, you should give a detailed reason about why you think the candidate is related to the crash or not. Then, evaluate whether the candidate is related to the crash by call `evaluate_candidate` tool."
-            if config.enable_notes
-            else "After you fully understand the crash and the candidate, you should call `evaluate_candidate` tool to evaluate whether the candidate is related to the crash."
-        )
+            Your workflow is divided into two phases. You must adhere to this process strictly.
 
-        prompts = [
-            "You are an Android expert that assist with locating the cause of the crash of Android application.",
-            "You will be given a crash report first, then you need to analyze the crash report and the cause of the crash.",
-            "You can use tools to get the application code, manifest, methods, fields, etc. to help you analyze the crash.",
-            constraint_prompt,
-            notes_prompt,
-            response_prompt,
-        ]
+            # Phase 1: Initial Crash Analysis (First Turn)
 
-        return Prompt.Part.merger(prompts)
+            When you first receive the crash message and stack trace, your immediate goal is to perform a comprehensive initial analysis. Do not evaluate anything yet. Your analysis should be a detailed, comprehensive thought process where you:
+
+            - Step 1 Analyze the Stack Trace
+            + Read the stack trace from bottom to top to understand the entire call flow.
+
+            - Step 2 Formulate a Hypothesis
+            + Based on the exception type and the call flow, form a preliminary hypothesis. Identify:
+            + A likely Immediate Cause: The application method at the top of the stack trace that directly caused the crash.
+            + A potential Root Cause: The method further down the stack trace where the problematic data or state (e.g., the null value) likely originated.
+
+            - Step 3 Identify Information Gaps & Plan Tool Use: Consider what information you would need to confirm your hypothesis. While the user may provide code snippets, think about how you would use your tools if that information were missing. For example:
+            + If a key method in the stack trace is not provided, you would use get_application_code to retrieve its source.
+            + If you need to understand how a class interacts with others, you would use list_application_methods or list_application_fields.
+            + If you suspect a lifecycle issue or a problem with component registration (like a Service or BroadcastReceiver), you would use get_application_manifest.
+
+            You will keep this hypothesis in mind for the entire duration of the chat.
+
+            # Phase 2: Candidate Evaluation (For Each Candidate Method)
+
+            After the initial analysis, the user will provide you with candidate methods one by one. For each candidate, you will perform the following detailed thinking process:
+
+            - Step 1 Recall Your Hypothesis: Briefly recall your analysis of the Immediate Cause and Root Cause.
+
+            - Step 2 Classify the Candidate: Compare the current candidate method against your hypothesis and classify it into one of the following categories:
+            + The Root Cause: Is this the method where the problematic data was first created? (e.g., from a failed parsing, a network call returning no data, etc.).
+            + The Immediate Cause: Is this the method that directly used the bad data and triggered the exception?
+            + The Propagation Path: Is this method simply passing the bad data from an earlier call to a later one?
+
+            - Step 3 Construct Your Reasoning: Based on your classification, formulate a clear and concise reason.
+
+            + If it's a critical method (A or B), explain why it's the root or immediate cause.
+            + If it's on the propagation path (C), state this clearly, explaining that while it's in the call stack, it's not the source of the problem and shouldn't be the focus of the fix.
+
+            - Step 4 Call evaluate_candidate: Based on your classification, call the evaluate_candidate tool with the following strict rules:
+
+            + MUST evaluate as is_crash_related: true if the method is classified as The Root Cause or The Immediate Cause.
+            + MUST evaluate as is_crash_related: false if the method is classified as The Propagation Path.
+            + Constraint: The total number of candidates evaluated as true across the entire conversation should not exceed 2, as there are typically only one root cause and one immediate cause.
+
+            Await the next candidate and repeat this process.
+        """).strip()
+
+        return prompt
 
     @staticmethod
     def _FILTER_CANDIDATE_CRASH(
