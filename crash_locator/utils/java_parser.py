@@ -293,8 +293,8 @@ def _get_method_code_in_file(
         raise CodeFileNotFoundException()
 
     with open(file_path, "r", encoding="utf-8") as f:
-        code_lines = f.readlines()
-    tree = parser.parse(bytes("".join(code_lines), "utf8"))
+        code_bytes = f.read().encode("utf-8")
+    tree = parser.parse(code_bytes)
 
     query_string = f"""
     (
@@ -321,19 +321,42 @@ def _get_method_code_in_file(
     elif len(method) > 1:
         codes = []
         for method_node in method:
-            codes.append(_get_method_code_by_node(method_node, code_lines))
+            codes.append(_wrap_method_in_class(method_node, code_bytes))
         return (
             "Multiple methods found, one of them may be the method you want:\n"
             + "\n\n".join(codes)
         )
     else:
-        return _get_method_code_by_node(method[0], code_lines)
+        return _wrap_method_in_class(method[0], code_bytes)
 
 
-def _get_method_code_by_node(method_node: Node, code_lines: list[str]) -> str:
+def _wrap_method_in_class(method_node: Node, code_bytes: bytes) -> str:
+    class_node = find_ancestor_by_type(method_node, "class_declaration")
+    if class_node is None:
+        raise UnknownException()
+    start_byte_index = class_node.start_byte
+    last_node = None
+    for child in class_node.children:
+        if child.type == "class_body":
+            break
+        last_node = child
+    if last_node is None:
+        raise UnknownException()
+    end_byte_index = last_node.end_byte
+    class_code = code_bytes[start_byte_index:end_byte_index]
+    return (
+        class_code.decode("utf-8")
+        + " {\n"
+        + _get_method_code_by_node(method_node, code_bytes)
+        + "\n}"
+    )
+
+
+def _get_method_code_by_node(method_node: Node, code_bytes: bytes) -> str:
+    code_lines = code_bytes.decode("utf-8").split("\n")
     start_row = method_node.start_point.row
     end_row = method_node.end_point.row
-    return "".join(code_lines[start_row : end_row + 1])
+    return "\n".join(code_lines[start_row : end_row + 1])
 
 
 def _filter_methods(
