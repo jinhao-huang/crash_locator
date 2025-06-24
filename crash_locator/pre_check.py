@@ -268,7 +268,7 @@ def _get_and_check_framework_stack(
     for index, (method, method_short_api) in enumerate(
         zip(stack_trace, stack_trace_short_api)
     ):
-        method_type = get_method_type(method)
+        method_type = get_method_type(method_short_api)
         if method_type == PackageType.ANDROID:
             framework_trace.append(method)
             framework_short_trace.append(method_short_api)
@@ -522,7 +522,10 @@ def pre_check(crash_report_path: Path) -> ReportInfo:
         stack_trace=stack_trace,
         stack_trace_short_api=stack_trace_short_api,
         framework_trace=[
-            MethodSignature.from_str(method) for method in framework_trace
+            MethodSignature.from_str(method)
+            if ";" not in method
+            else MethodSignature.from_str(short_method)
+            for method, short_method in zip(framework_trace, framework_short_trace)
         ],
         framework_trace_short_api=framework_short_trace,
         framework_entry_api=framework_entry_api,
@@ -660,6 +663,7 @@ def main():
             try:
                 report_info = pre_check(crash_report_path)
             except PreCheckException as e:
+                logger.exception(e)
                 logger.error(f"Crash report {report_name} pre-check failed: {e}")
                 _failed_statistic(report_name, statistic, e)
             except Exception as e:
