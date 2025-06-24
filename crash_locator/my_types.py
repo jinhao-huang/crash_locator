@@ -332,8 +332,13 @@ class MethodSignature(BaseModel):
         return class_list
 
     def __str__(self) -> str:
-        params = ", ".join(self.parameters) if self.parameters else ""
-        return f"{self.package_name}.{self.class_name}{'.' + self.inner_class if self.inner_class else ''}: {self.return_type} {self.method_name}({params})"
+        if self.parameters is not None and self.return_type is not None:
+            params = ", ".join(self.parameters) if self.parameters else ""
+            return f"{self.package_name}.{self.class_name}{'.' + self.inner_class if self.inner_class else ''}: {self.return_type} {self.method_name}({params})"
+        elif self.parameters is None and self.return_type is None:
+            return f"{self.package_name}.{self.class_name}{'.' + self.inner_class if self.inner_class else ''}.{self.method_name}"
+        else:
+            raise ValueError(f"Invalid method signature: {self}")
 
     def __eq__(self, other: "MethodSignature") -> bool:
         if self.package_name != other.package_name:
