@@ -125,6 +125,8 @@ class RunStatistic(BaseModel):
         default_factory=dict,
     )
 
+    tool_calling_detail: dict[str, int] = Field(default_factory=dict)
+
     corrected_candidates: int = 0
     corrected_candidates_detail: dict[str, int] = Field(default_factory=dict)
     corrected_buggy_method: int = 0

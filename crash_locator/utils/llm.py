@@ -462,6 +462,10 @@ def _call_tool_factory(
 
     def call_tool(tool_name: str, tool_args: dict) -> str:
         try:
+            if tool_name not in run_statistic.tool_calling_detail:
+                run_statistic.tool_calling_detail[tool_name] = 0
+            run_statistic.tool_calling_detail[tool_name] += 1
+
             match tool_name:
                 case "evaluate_candidate":
                     return _evaluate_candidate(
